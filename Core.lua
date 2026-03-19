@@ -66,21 +66,43 @@ SlashCmdList["OGAPI"] = function()
     end
 end
 
--- Minimal isolated test: /ogtest  (writes "DKP:TEST" to YOUR officer note)
+-- Minimal isolated test: /ogtest  (tests all SetNote variants)
 SLASH_OGTEST1 = "/ogtest"
 SlashCmdList["OGTEST"] = function()
     local myName = UnitName("player")
     local numGuild = GetNumGuildMembers() or 0
+    -- Check permissions first
+    print("|cFFFFB800[OG-Test] === BERECHTIGUNGEN ===|r")
+    print("|cFF00FFFF  IsGuildOfficer() = " .. tostring(IsGuildOfficer and IsGuildOfficer()) .. "|r")
+    if C_GuildInfo then
+        print("|cFF00FFFF  CanEditOfficerNote() = " .. tostring(C_GuildInfo.CanEditOfficerNote and C_GuildInfo.CanEditOfficerNote()) .. "|r")
+        print("|cFF00FFFF  CanViewOfficerNote() = " .. tostring(C_GuildInfo.CanViewOfficerNote and C_GuildInfo.CanViewOfficerNote()) .. "|r")
+    end
     print("|cFFFFB800[OG-Test] Suche " .. myName .. " in " .. numGuild .. " Mitgliedern...|r")
     for i = 1, numGuild do
-        local gName, _, _, _, _, _, _, officerNote, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
+        local gName, _, rankIdx, _, _, _, _, officerNote, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
         if gName then
             local gs = strsplit("-", gName)
             if gs == myName then
-                print("|cFF00FFFF[OG-Test] Gefunden: Index=" .. i .. " GUID=" .. tostring(guid) .. " OfficerNote='" .. tostring(officerNote) .. "'|r")
-                print("|cFF00FFFF[OG-Test] Rufe C_GuildInfo.SetNote(guid, 'DKP:TEST', false) auf...|r")
-                local ok, err = pcall(C_GuildInfo.SetNote, guid, "DKP:TEST", false)
-                print("|cFF00FFFF[OG-Test] pcall result: ok=" .. tostring(ok) .. " err=" .. tostring(err) .. "|r")
+                print("|cFF00FFFF[OG-Test] Gefunden: Index=" .. i .. " Rank=" .. tostring(rankIdx) .. " GUID=" .. tostring(guid) .. "|r")
+                print("|cFF00FFFF[OG-Test] Aktuelle OfficerNote: '" .. tostring(officerNote) .. "'|r")
+                
+                -- Test 1: SetNote with false (should be officer note)
+                print("|cFFFFAA00[OG-Test] Test 1: SetNote(guid, 'TEST-FALSE', false)|r")
+                local ok1, err1 = pcall(C_GuildInfo.SetNote, guid, "TEST-FALSE", false)
+                print("|cFF00FFFF  Result: ok=" .. tostring(ok1) .. " err=" .. tostring(err1) .. "|r")
+                
+                -- Test 2: SetNote with true (should be public note)  
+                print("|cFFFFAA00[OG-Test] Test 2: SetNote(guid, 'TEST-TRUE', true)|r")
+                local ok2, err2 = pcall(C_GuildInfo.SetNote, guid, "TEST-TRUE", true)
+                print("|cFF00FFFF  Result: ok=" .. tostring(ok2) .. " err=" .. tostring(err2) .. "|r")
+                
+                -- Test 3: SetNote with only 2 args (no boolean)
+                print("|cFFFFAA00[OG-Test] Test 3: SetNote(guid, 'TEST-NOARG')|r")
+                local ok3, err3 = pcall(C_GuildInfo.SetNote, guid, "TEST-NOARG")
+                print("|cFF00FFFF  Result: ok=" .. tostring(ok3) .. " err=" .. tostring(err3) .. "|r")
+                
+                print("|cFFFFB800[OG-Test] Pruefe jetzt deine Notiz + Offiziersnotiz im Gildenfenster!|r")
                 return
             end
         end
