@@ -29,20 +29,15 @@ local function SafeSetOfficerNote(index, note)
         GuildRosterSetOfficerNote(index, note)
         return true
     end
-    -- Retail TWW+: C_GuildInfo.SetNote(guid, note, isOfficer)
-    -- isOfficer=true means officer note, false means public note
+    -- Retail: C_GuildInfo.SetNote(guid, note, isPublic)
     if C_GuildInfo and C_GuildInfo.SetNote then
         local fullName, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(index)
-        print("|cFF00FFFF[OG-Debug] SetNote Index=" .. tostring(index) .. " Name=" .. tostring(fullName) .. " GUID=" .. tostring(guid) .. " Note=" .. tostring(note) .. " isOfficer=true|r")
         if guid then
-            C_GuildInfo.SetNote(guid, note, true)
+            C_GuildInfo.SetNote(guid, note, false)
             return true
-        else
-            print("|cFFFF0000[OneGuild] ERROR: Kein GUID fuer Index " .. tostring(index) .. " (" .. tostring(fullName) .. ")|r")
-            return false
         end
+        return false
     end
-    print("|cFFFF0000[OneGuild] ERROR: Keine SetOfficerNote-Funktion gefunden! Bitte /ogapi ausfuehren und Ergebnis melden.|r")
     return false
 end
 OneGuild.SafeSetOfficerNote = SafeSetOfficerNote
@@ -66,89 +61,73 @@ SlashCmdList["OGAPI"] = function()
     end
 end
 
--- Minimal isolated test: /ogtest  (tests all SetNote variants + Club API)
+-- Minimal isolated test: /ogtest  (tests Club API officer note writing)
 SLASH_OGTEST1 = "/ogtest"
 SlashCmdList["OGTEST"] = function()
     local myName = UnitName("player")
-    local numGuild = GetNumGuildMembers() or 0
     
-    print("|cFFFFB800[OG-Test] === BERECHTIGUNGEN ===|r")
-    if C_GuildInfo then
-        print("|cFF00FFFF  CanEditOfficerNote() = " .. tostring(C_GuildInfo.CanEditOfficerNote and C_GuildInfo.CanEditOfficerNote()) .. "|r")
-    end
-    
-    -- Find player index
-    local myIndex, myGUID
-    for i = 1, numGuild do
-        local gName, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
-        if gName then
-            local gs = strsplit("-", gName)
-            if gs == myName then
-                myIndex = i
-                myGUID = guid
-                break
-            end
-        end
-    end
-    if not myIndex then
-        print("|cFFFF4444[OG-Test] Nicht gefunden!|r")
+    if not C_Club then
+        print("|cFFFF4444[OG-Test] C_Club nicht vorhanden!|r")
         return
     end
-    print("|cFF00FFFF[OG-Test] Gefunden: Index=" .. myIndex .. " GUID=" .. tostring(myGUID) .. "|r")
     
-    -- Test 4: SetNote with INDEX (number) instead of GUID
-    print("|cFFFFAA00[OG-Test] Test 4: SetNote(index, 'DKP:999', false) -- index als Nummer|r")
-    local ok4, err4 = pcall(C_GuildInfo.SetNote, myIndex, "DKP:999", false)
-    print("|cFF00FFFF  Result: ok=" .. tostring(ok4) .. " err=" .. tostring(err4) .. "|r")
-    
-    -- Test 5: SetNote with INDEX and true
-    print("|cFFFFAA00[OG-Test] Test 5: SetNote(index, 'DKP:999', true) -- index + true|r")
-    local ok5, err5 = pcall(C_GuildInfo.SetNote, myIndex, "DKP:999", true)
-    print("|cFF00FFFF  Result: ok=" .. tostring(ok5) .. " err=" .. tostring(err5) .. "|r")
-
-    -- Test 6: Club API approach
-    print("|cFFFFAA00[OG-Test] === CLUB API ===|r")
-    if C_Club then
-        local clubId = C_Club.GetGuildClubId and C_Club.GetGuildClubId()
-        print("|cFF00FFFF  GuildClubId = " .. tostring(clubId) .. "|r")
-        if clubId then
-            local members = C_Club.GetClubMembers and C_Club.GetClubMembers(clubId)
-            if members then
-                print("|cFF00FFFF  Club hat " .. #members .. " Mitglieder|r")
-                -- Find our memberId
-                for _, memberId in ipairs(members) do
-                    local info = C_Club.GetMemberInfo(clubId, memberId)
-                    if info and info.name and info.name:find(myName) then
-                        print("|cFF00FFFF  Mein ClubMemberId = " .. tostring(memberId) .. "|r")
-                        print("|cFF00FFFF  info.officerNote = '" .. tostring(info.officerNote) .. "'|r")
-                        print("|cFF00FFFF  info.memberNote = '" .. tostring(info.memberNote) .. "'|r")
-                        
-                        -- Try Club API to set officer note
-                        if C_Club.SetClubMemberNote then
-                            print("|cFFFFAA00[OG-Test] Test 6a: C_Club.SetClubMemberNote(clubId, memberId, 'DKP:CLUB')|r")
-                            local ok6a, err6a = pcall(C_Club.SetClubMemberNote, clubId, memberId, "DKP:CLUB")
-                            print("|cFF00FFFF  Result: ok=" .. tostring(ok6a) .. " err=" .. tostring(err6a) .. "|r")
-                        end
-                        
-                        -- List all C_Club functions that contain "Note"
-                        print("|cFFFFAA00[OG-Test] C_Club Funktionen mit 'Note':|r")
-                        for k, v in pairs(C_Club) do
-                            if k:lower():find("note") then
-                                print("|cFF00FFFF  " .. k .. " = " .. type(v) .. "|r")
-                            end
-                        end
-                        break
-                    end
-                end
-            else
-                print("|cFFFF4444  GetClubMembers returned nil|r")
-            end
-        end
-    else
-        print("|cFFFF4444  C_Club existiert nicht!|r")
+    local clubId = C_Club.GetGuildClubId and C_Club.GetGuildClubId()
+    if not clubId then
+        print("|cFFFF4444[OG-Test] Keine GuildClubId!|r")
+        return
     end
     
-    print("|cFFFFB800[OG-Test] Pruefe Notiz + Offiziersnotiz im Gildenfenster!|r")
+    local members = C_Club.GetClubMembers(clubId)
+    if not members then
+        print("|cFFFF4444[OG-Test] Keine Mitglieder!|r")
+        return
+    end
+    
+    -- Find me
+    local myMemberId, myInfo
+    for _, memberId in ipairs(members) do
+        local info = C_Club.GetMemberInfo(clubId, memberId)
+        if info and info.name and info.name:find(myName) then
+            myMemberId = memberId
+            myInfo = info
+            break
+        end
+    end
+    
+    if not myMemberId then
+        print("|cFFFF4444[OG-Test] Nicht gefunden in Club!|r")
+        return
+    end
+    
+    print("|cFFFFB800[OG-Test] ClubId=" .. clubId .. " MemberId=" .. myMemberId .. "|r")
+    print("|cFF00FFFF  VORHER: memberNote='" .. tostring(myInfo.memberNote) .. "' officerNote='" .. tostring(myInfo.officerNote) .. "'|r")
+    
+    -- Test A: SetClubMemberNote with 3 args (public note)
+    print("|cFFFFAA00[OG-Test] A: SetClubMemberNote(clubId, memberId, 'NOTE-A')|r")
+    pcall(C_Club.SetClubMemberNote, clubId, myMemberId, "NOTE-A")
+    
+    -- Re-read after A
+    local infoA = C_Club.GetMemberInfo(clubId, myMemberId)
+    print("|cFF00FFFF  NACH A: memberNote='" .. tostring(infoA and infoA.memberNote) .. "' officerNote='" .. tostring(infoA and infoA.officerNote) .. "'|r")
+    
+    -- Test B: SetClubMemberNote with 4th arg = true
+    print("|cFFFFAA00[OG-Test] B: SetClubMemberNote(clubId, memberId, 'NOTE-B', true)|r")
+    local okB, errB = pcall(C_Club.SetClubMemberNote, clubId, myMemberId, "NOTE-B", true)
+    print("|cFF00FFFF  Result: ok=" .. tostring(okB) .. " err=" .. tostring(errB) .. "|r")
+    
+    -- Re-read after B
+    local infoB = C_Club.GetMemberInfo(clubId, myMemberId)
+    print("|cFF00FFFF  NACH B: memberNote='" .. tostring(infoB and infoB.memberNote) .. "' officerNote='" .. tostring(infoB and infoB.officerNote) .. "'|r")
+    
+    -- List ALL C_Club functions (for finding officer note func)
+    print("|cFFFFAA00[OG-Test] Alle C_Club Funktionen mit 'Officer' oder 'Note':|r")
+    for k, v in pairs(C_Club) do
+        if k:lower():find("officer") or k:lower():find("note") then
+            print("|cFF00FFFF  " .. k .. " = " .. type(v) .. "|r")
+        end
+    end
+    
+    print("|cFFFFB800[OG-Test] Pruefe Gildenfenster!|r")
 end
 
 ------------------------------------------------------------------------
@@ -237,7 +216,7 @@ local DEFAULTS = {
 OneGuild.isGuildVerified = false
 OneGuild.playerGuild     = nil
 OneGuild.playerName      = nil
-OneGuild.debugMode       = true   -- DEBUG: auf false setzen um Debug-Ausgaben zu deaktivieren
+OneGuild.debugMode       = false  -- DEBUG: auf true setzen um Debug-Ausgaben zu aktivieren
 OneGuild.newerVersion    = nil    -- set to newer version string if a guild member has a higher version
 
 --- Compare two semver strings ("1.2.3"). Returns 1 if a>b, -1 if a<b, 0 if equal.
