@@ -24,20 +24,26 @@ OneGuild.VERSION = "1.0.9"
 -- Safe Officer Note Writer (compat for different WoW API versions)
 ------------------------------------------------------------------------
 local function SafeSetOfficerNote(index, note)
+    -- Try classic global function first
     if GuildRosterSetOfficerNote then
         GuildRosterSetOfficerNote(index, note)
         return true
-    elseif C_GuildInfo and C_GuildInfo.SetOfficerNote then
-        C_GuildInfo.SetOfficerNote(index, note)
-        return true
-    elseif C_GuildInfo and C_GuildInfo.SetMemberNote then
-        -- Some versions use SetMemberNote with a flag
-        C_GuildInfo.SetMemberNote(index, note, true)
-        return true
-    else
-        print("|cFFFF0000[OneGuild] ERROR: Keine SetOfficerNote-Funktion gefunden! Bitte /ogapi ausfuehren und Ergebnis melden.|r")
-        return false
     end
+    -- Retail TWW+: C_GuildInfo.SetNote(guid, note, isPublic)
+    -- isPublic=false means officer note
+    if C_GuildInfo and C_GuildInfo.SetNote then
+        -- We need the GUID from GetGuildRosterInfo (17th return value)
+        local fullName, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(index)
+        if guid then
+            C_GuildInfo.SetNote(guid, note, false)
+            return true
+        else
+            print("|cFFFF0000[OneGuild] ERROR: Kein GUID fuer Index " .. tostring(index) .. " (" .. tostring(fullName) .. ")|r")
+            return false
+        end
+    end
+    print("|cFFFF0000[OneGuild] ERROR: Keine SetOfficerNote-Funktion gefunden! Bitte /ogapi ausfuehren und Ergebnis melden.|r")
+    return false
 end
 OneGuild.SafeSetOfficerNote = SafeSetOfficerNote
 
