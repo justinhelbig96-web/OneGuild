@@ -1985,7 +1985,9 @@ function OneGuild:RefreshDKPDistribution()
 
     local scroll = f.scrollContent
     local ROW_H = 22
-    local visible = math.floor((scroll:GetHeight() or 300) / ROW_H)
+    local scrollH = scroll:GetHeight()
+    if not scrollH or scrollH < 10 then scrollH = 340 end
+    local visible = math.floor(scrollH / ROW_H)
 
     -- Preserve check state
     local checkState = {}
@@ -2242,7 +2244,8 @@ function OneGuild:ShowDKPHistory()
     end)
 
     dkpHistFrame = f
-    self:RefreshDKPHistory()
+    f:Show()
+    C_Timer.After(0.05, function() OneGuild:RefreshDKPHistory() end)
 end
 
 ------------------------------------------------------------------------
@@ -2263,7 +2266,9 @@ function OneGuild:RefreshDKPHistory()
     end
 
     f.totalEntries = #sorted
-    local visible = math.floor((scroll:GetHeight() or 300) / ROW_H)
+    local scrollH = scroll:GetHeight()
+    if not scrollH or scrollH < 10 then scrollH = 380 end
+    local visible = math.floor(scrollH / ROW_H)
 
     for i = 1, math.max(visible + 1, #f.histRows) do
         local dataIdx = i + (f.scrollOffset or 0)

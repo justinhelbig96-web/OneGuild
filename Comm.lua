@@ -1078,6 +1078,11 @@ function OneGuild:ProcessDKP(sender, data)
     local dkpVal = tonumber(dkpStr) or 0
 
     self.db.dkp[memberKey] = dkpVal
+    -- Also store under short name for consistent lookups
+    local shortKey = strsplit("-", memberKey)
+    if shortKey and shortKey ~= memberKey then
+        self.db.dkp[shortKey] = dkpVal
+    end
 
     if self.RefreshMembers then self:RefreshMembers() end
 end
