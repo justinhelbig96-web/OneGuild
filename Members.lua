@@ -52,21 +52,37 @@ end
 ------------------------------------------------------------------------
 local function GetDKP(member)
     if not OneGuild.db or not OneGuild.db.dkp then return 0 end
-    -- Check all sender keys (merged member may have multiple)
+    local dkp = OneGuild.db.dkp
+    -- Check all sender keys + their short names
     if member._senderKeys then
         for _, sk in ipairs(member._senderKeys) do
-            local v = OneGuild.db.dkp[sk]
+            local v = dkp[sk]
             if v and v ~= 0 then return v end
+            local short = strsplit("-", sk)
+            if short and short ~= sk then
+                v = dkp[short]
+                if v and v ~= 0 then return v end
+            end
         end
     end
-    return OneGuild.db.dkp[member.sender] or 0
+    -- Check primary sender
+    local v = dkp[member.sender]
+    if v and v ~= 0 then return v end
+    -- Check main name
+    if member.mainName then
+        v = dkp[member.mainName]
+        if v and v ~= 0 then return v end
+    end
+    return 0
 end
 
 local function GetDKPKey(member)
-    -- Return the canonical key used for DKP storage (first sender that has DKP, or primary sender)
     if member._senderKeys and OneGuild.db and OneGuild.db.dkp then
+        local dkp = OneGuild.db.dkp
         for _, sk in ipairs(member._senderKeys) do
-            if OneGuild.db.dkp[sk] and OneGuild.db.dkp[sk] ~= 0 then return sk end
+            if dkp[sk] and dkp[sk] ~= 0 then return sk end
+            local short = strsplit("-", sk)
+            if short and short ~= sk and dkp[short] and dkp[short] ~= 0 then return short end
         end
     end
     return member.sender
