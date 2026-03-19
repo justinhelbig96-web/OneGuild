@@ -614,12 +614,11 @@ SlashCmdList["ONEGUILD"] = function(msg)
             OneGuild:Print("|cFFFF4444Schreiben fehlgeschlagen!|r Siehe Fehlermeldung oben.")
         end
     elseif msg == "dkppush" then
-        -- Force push all DKP to officer notes
+        -- Force push all DKP to officer notes (direct from slash = hardware event)
         OneGuild:Print("|cFFFFD700Erzwinge DKP-Push in Offiziersnotizen...|r")
         OneGuild:RequestGuildRoster()
-        C_Timer.After(2, function()
-            OneGuild:PushAllDKPToOfficerNotes()
-        end)
+        -- Small delay to let roster load, but use After only for roster, then push directly
+        OneGuild:PushAllDKPToOfficerNotes()
     elseif msg == "help" then
         OneGuild:Print("Befehle:")
         OneGuild:Print("  /og         - Hauptfenster öffnen/schließen")
@@ -906,7 +905,6 @@ function OneGuild:SaveDKPToOfficerNote(memberKey, dkpVal)
             if gs == shortName or gName == memberKey then
                 local newNote = "DKP:" .. tostring(dkpVal)
                 SafeSetOfficerNote(i, newNote)
-                print("|cFF00FF00[OneGuild] SetGuildNote_DKP_" .. gs .. " : " .. tostring(dkpVal) .. "|r")
                 self:Debug("DKP in Offiziersnotiz gespeichert: " .. gs .. " = " .. tostring(dkpVal))
                 -- Force roster refresh so other online members get the update
                 self:RequestGuildRoster()
@@ -974,7 +972,6 @@ function OneGuild:PushAllDKPToOfficerNotes()
                 if currentDKP ~= localDKP then
                     local newNote = "DKP:" .. tostring(localDKP)
                     SafeSetOfficerNote(i, newNote)
-                    print("|cFF00FF00[OneGuild] SetGuildNote_DKP_" .. gs .. " : " .. tostring(localDKP) .. "|r")
                     pushed = pushed + 1
                 end
             end

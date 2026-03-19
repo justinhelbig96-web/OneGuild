@@ -81,15 +81,16 @@ function OneGuild:InitComm()
     end)
 
     -- Push all local DKP to officer notes (in case they got out of sync)
-    -- Request roster first at 8s, then push at 12s when data is loaded
+    -- NOTE: Auto-push removed - SetNote requires hardware event context in TWW.
+    -- DKP push now happens via Sync button click or /og dkppush.
     C_Timer.After(8, function()
         if OneGuild:IsAuthorized() then
             OneGuild:RequestGuildRoster()
         end
     end)
     C_Timer.After(12, function()
-        if OneGuild:IsAuthorized() and OneGuild.PushAllDKPToOfficerNotes then
-            OneGuild:PushAllDKPToOfficerNotes()
+        if OneGuild:IsAuthorized() then
+            OneGuild:LoadDKPFromOfficerNotes()
         end
     end)
 end
@@ -1203,11 +1204,11 @@ end
 ------------------------------------------------------------------------
 function OneGuild:SendDKPUpdate(memberKey, dkpVal)
     self:SendCommMessage(MSG_DKP, memberKey .. "|" .. tostring(dkpVal))
-    -- Save to officer notes immediately
-    if self.SaveDKPToOfficerNote then
-        self:SaveDKPToOfficerNote(memberKey, dkpVal)
-    end
-    -- Request roster refresh so all online members get the officer note change
+    -- Queue officer note write for next Sync click (SetNote needs hardware event)
+    if not self._pendingDKPNotes then self._pendingDKPNotes = {} end
+    self._pendingDKPNotes[memberKey] = dkpVal
+    self:Debug("DKP queued for officer note: " .. memberKey .. " = " .. tostring(dkpVal))
+    -- Request roster refresh so all online members get the comm update
     self:RequestGuildRoster()
 end
 

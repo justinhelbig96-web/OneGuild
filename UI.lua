@@ -242,6 +242,19 @@ function OneGuild:BuildMainFrame()
             OneGuild:Print(OneGuild.COLORS.SUCCESS ..
                 "Vollstaendiger Sync gestartet (Spieler, Charaktere, Raids, Events).|r")
         end
+
+        -- Push DKP to officer notes (MUST happen from hardware click!)
+        if OneGuild.PushAllDKPToOfficerNotes and OneGuild:IsAuthorized() then
+            OneGuild:PushAllDKPToOfficerNotes()
+        end
+        -- Also flush any pending individual DKP note saves
+        if OneGuild._pendingDKPNotes and OneGuild.SaveDKPToOfficerNote then
+            for memberKey, dkpVal in pairs(OneGuild._pendingDKPNotes) do
+                OneGuild:SaveDKPToOfficerNote(memberKey, dkpVal)
+            end
+            OneGuild._pendingDKPNotes = nil
+        end
+
         -- Refresh current tab
         local idx = OneGuild.currentTab
         if idx == 1 and OneGuild.RefreshMembers then OneGuild:RefreshMembers()
