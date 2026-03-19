@@ -16,6 +16,7 @@ Settings.lua
 Characters.lua
 Welcome.lua
 GuildTab.lua
+DKPLoot.lua
 UI.lua
 Members.lua
 Events.lua

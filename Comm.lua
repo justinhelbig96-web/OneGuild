@@ -33,6 +33,10 @@ local MSG_LACTIVATE = "LAP"         -- loot auto-pass activate/deactivate
 local MSG_RGROUPS  = "RGS"          -- raid groups sync
 local MSG_GGROUP   = "GGR"          -- global group assignment sync
 local MSG_GLM      = "GLM"          -- global lootmeister sync
+local MSG_AUCSTART = "ACS"          -- DKP auction start
+local MSG_AUCBID   = "ACB"          -- DKP auction bid
+local MSG_AUCEND   = "ACE"          -- DKP auction end (winner)
+local MSG_AUCCANCEL= "ACC"          -- DKP auction cancel
 
 ------------------------------------------------------------------------
 -- State
@@ -379,6 +383,14 @@ function OneGuild:HandleAddonMessage(prefix, message, channel, sender)
         self:ProcessGlobalGroups(sender, data)
     elseif msgType == MSG_GLM      then
         self:ProcessGlobalLM(sender, data)
+    elseif msgType == MSG_AUCSTART then
+        if self.ProcessAuctionStart then self:ProcessAuctionStart(sender, data) end
+    elseif msgType == MSG_AUCBID   then
+        if self.ProcessAuctionBid then self:ProcessAuctionBid(sender, data) end
+    elseif msgType == MSG_AUCEND   then
+        if self.ProcessAuctionEnd then self:ProcessAuctionEnd(sender, data) end
+    elseif msgType == MSG_AUCCANCEL then
+        if self.ProcessAuctionCancel then self:ProcessAuctionCancel(sender, data) end
     elseif msgType == MSG_BYE      then
         if self.db and self.db.addonMembers and self.db.addonMembers[sender] then
             self.db.addonMembers[sender].online = false

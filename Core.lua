@@ -18,7 +18,7 @@ OneGuild.REQUIRED_GUILD = "One"
 ------------------------------------------------------------------------
 -- Version & Constants
 ------------------------------------------------------------------------
-OneGuild.VERSION = "1.0.7"
+OneGuild.VERSION = "1.0.8"
 
 ------------------------------------------------------------------------
 -- Admin Whitelist  –  Characters listed here get auto-admin rights.
@@ -48,6 +48,7 @@ local DEFAULTS = {
     addonMembers = {},        -- { ["Name-Realm"] = { main, classFile, level, lastSeen, version } }
     dkp          = {},        -- { ["Name-Realm"] = number }  DKP per member
     dkpHistory   = {},        -- { { player, amount, newTotal, bonusType, source, timestamp } }
+    auctionHistory = {},      -- { { itemLink, itemName, auctioneer, winner, winAmount, timestamp } }
     deletedRaids  = {},       -- { ["created:author"] = true }  tombstones for deleted raids
     deletedEvents = {},       -- { ["created:author"] = true }  tombstones for deleted events
     raidGroups   = {},        -- global raid groups { [1..8] = { "Name", ... } }

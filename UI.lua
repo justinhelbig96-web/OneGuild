@@ -14,7 +14,7 @@ local FRAME_HEIGHT = 520
 local TAB_HEIGHT   = 30
 local HEADER_H     = 60
 
-local TAB_NAMES = { "Mitglieder", "Events", "Raid", "Notizen", "Charaktere" }
+local TAB_NAMES = { "Mitglieder", "Events", "Raid", "DKP Loot", "Notizen", "Charaktere" }
 
 ------------------------------------------------------------------------
 -- State
@@ -247,8 +247,9 @@ function OneGuild:BuildMainFrame()
         if idx == 1 and OneGuild.RefreshMembers then OneGuild:RefreshMembers()
         elseif idx == 2 and OneGuild.RefreshEvents then OneGuild:RefreshEvents()
         elseif idx == 3 and OneGuild.RefreshRaid then OneGuild:RefreshRaid()
-        elseif idx == 4 and OneGuild.RefreshNotes then OneGuild:RefreshNotes()
-        elseif idx == 5 and OneGuild.RefreshCharacters then OneGuild:RefreshCharacters()
+        elseif idx == 4 and OneGuild.RefreshDKPLoot then OneGuild:RefreshDKPLoot()
+        elseif idx == 5 and OneGuild.RefreshNotes then OneGuild:RefreshNotes()
+        elseif idx == 6 and OneGuild.RefreshCharacters then OneGuild:RefreshCharacters()
         end
 
         -- After 2.5s: stop spinning, show checkmark
@@ -373,7 +374,7 @@ function OneGuild:BuildMainFrame()
 
     for i, name in ipairs(TAB_NAMES) do
         local tab = CreateFrame("Button", "OneGuildTab" .. i, tabContainer, "BackdropTemplate")
-        tab:SetSize(96, TAB_HEIGHT - 4)
+        tab:SetSize(90, TAB_HEIGHT - 4)
         tab:SetBackdrop({
             bgFile   = "Interface\\Buttons\\WHITE8x8",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -435,6 +436,7 @@ function OneGuild:BuildMainFrame()
     if self.BuildMembersTab then self:BuildMembersTab() end
     if self.BuildEventsTab then self:BuildEventsTab() end
     if self.BuildRaidTab then self:BuildRaidTab() end
+    if self.BuildDKPLootTab then self:BuildDKPLootTab() end
     if self.BuildNotesTab then  self:BuildNotesTab()  end
     if self.BuildCharactersTab then self:BuildCharactersTab() end
 
@@ -474,9 +476,11 @@ function OneGuild:ShowTab(index)
         self:RefreshEvents()
     elseif index == 3 and self.RefreshRaid then
         self:RefreshRaid()
-    elseif index == 4 and self.RefreshNotes then
+    elseif index == 4 and self.RefreshDKPLoot then
+        self:RefreshDKPLoot()
+    elseif index == 5 and self.RefreshNotes then
         self:RefreshNotes()
-    elseif index == 5 and self.RefreshCharacters then
+    elseif index == 6 and self.RefreshCharacters then
         self:RefreshCharacters()
     end
 end
