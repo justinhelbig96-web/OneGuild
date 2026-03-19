@@ -59,6 +59,27 @@ local function GetPinAlpha()
 end
 
 ------------------------------------------------------------------------
+-- Dynamic pin scale based on current map zoom level
+-- mapType: 0=Cosmic, 1=World, 2=Continent, 3=Zone, 4=Dungeon, 5=Micro, 6=Orphan
+------------------------------------------------------------------------
+local MAP_SCALE_FACTORS = {
+    [0] = 3.0,    -- Cosmic (all of Azeroth)
+    [1] = 2.8,    -- World (Eastern Kingdoms, Kalimdor, etc.)
+    [2] = 2.0,    -- Continent
+    [3] = 1.0,    -- Zone (base size)
+    [4] = 1.0,    -- Dungeon
+    [5] = 0.9,    -- Micro (subzone)
+    [6] = 1.0,    -- Orphan
+}
+
+local function GetMapScaleFactor(mapID)
+    if not mapID then return 1.0 end
+    local info = C_Map.GetMapInfo(mapID)
+    if not info then return 1.0 end
+    return MAP_SCALE_FACTORS[info.mapType] or 1.0
+end
+
+------------------------------------------------------------------------
 -- Helpers
 ------------------------------------------------------------------------
 local function MyFullName()
@@ -293,6 +314,13 @@ function OneGuild:UpdateWorldMapPins()
     local cw, ch = canvas:GetSize()
     if not cw or cw < 1 or not ch or ch < 1 then return end
 
+    -- Dynamic pin scaling based on map zoom level
+    local scale = GetMapScaleFactor(viewMapID)
+    local baseSz = GetPinSize()
+    local sz = math.floor(baseSz * scale + 0.5)
+    local lsz = math.floor(GetLabelSize() * math.max(scale * 0.8, 1) + 0.5)
+    local iconSz = math.max(sz - 4, 8)
+
     local used = {}
     for key, pos in pairs(self.memberPositions) do
         local nx, ny = ToViewedMapCoords(viewMapID, pos.mapID, pos.x, pos.y)
@@ -308,6 +336,15 @@ function OneGuild:UpdateWorldMapPins()
             if pin:GetParent() ~= canvas then
                 pin:SetParent(canvas)
             end
+
+            -- Apply dynamic size
+            pin:SetSize(sz + 4, sz + 16)
+            pin.border:SetSize(sz + 4, sz + 4)
+            pin.dot:SetSize(sz, sz)
+            if pin.classIcon then
+                pin.classIcon:SetSize(iconSz, iconSz)
+            end
+            pin.label:SetFont("Fonts\\FRIZQT__.TTF", lsz, "OUTLINE")
 
             pin:ClearAllPoints()
             pin:SetPoint("CENTER", canvas, "TOPLEFT", nx * cw, -ny * ch)
