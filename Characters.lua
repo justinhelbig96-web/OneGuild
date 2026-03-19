@@ -226,7 +226,7 @@ end
 -- Build Characters Tab (Tab 5)
 ------------------------------------------------------------------------
 function OneGuild:BuildCharactersTab()
-    local parent = self.tabFrames[5]
+    local parent = self.tabFrames[6]
     if not parent then return end
 
     -- Header
@@ -460,7 +460,7 @@ end
 function OneGuild:RefreshCharacters()
     if not self.db or not self.db.characters then return end
 
-    local parent = self.tabFrames[5]
+    local parent = self.tabFrames[6]
     if not parent then return end
 
     local sorted = self:GetSortedCharacters()

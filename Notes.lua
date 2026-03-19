@@ -21,7 +21,7 @@ local noteRows = {}
 -- Build Notes Tab
 ------------------------------------------------------------------------
 function OneGuild:BuildNotesTab()
-    local parent = self.tabFrames[4]
+    local parent = self.tabFrames[5]
     if not parent then return end
 
     -- MOTD Section
@@ -171,7 +171,7 @@ end
 -- Update MOTD display
 ------------------------------------------------------------------------
 function OneGuild:UpdateMOTDDisplay()
-    local parent = self.tabFrames[4]
+    local parent = self.tabFrames[5]
     if not parent or not parent.motdText then return end
 
     local motd = GetGuildRosterMOTD and GetGuildRosterMOTD() or ""
@@ -192,7 +192,7 @@ function OneGuild:RefreshNotes()
     self:UpdateMOTDDisplay()
 
     local notes = self.db.notes or {}
-    local parent = self.tabFrames[4]
+    local parent = self.tabFrames[5]
 
     -- Update count
     if parent and parent.noteCountText then
