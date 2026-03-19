@@ -9,8 +9,8 @@ local _, OneGuild = ...
 ------------------------------------------------------------------------
 -- Constants
 ------------------------------------------------------------------------
-local SETTINGS_W   = 460
-local SETTINGS_H   = 420
+local SETTINGS_W   = 470
+local SETTINGS_H   = 510
 local TAB_BTN_W    = 120
 local TAB_BTN_H    = 28
 local CONTENT_PAD  = 14
@@ -319,29 +319,29 @@ local permRadioButtons = {}
 
 local function BuildPermissionsTab(content)
     Label(content, 0, 0, "Berechtigungen", 14, 1, 0.72, 0)
-    HLine(content, -22)
-
-    -- Warning if not allowed
-    local warningText = content:CreateFontString(nil, "OVERLAY")
-    warningText:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
-    warningText:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -32)
-    warningText:SetWidth(280)
-    warningText:SetJustifyH("LEFT")
-    warningText:SetTextColor(1, 0.3, 0.3)
-    warningText:SetText("")
-
-    Label(content, 0, -52, "Wer darf DKP bearbeiten / verteilen?", 12, 0.87, 0.78, 0.55)
+    HLine(content, -20)
 
     local currentPerm = (OneGuild.db and OneGuild.db.settings and OneGuild.db.settings.dkpPermission) or "officer"
     local canEdit = OneGuild.CanEditPermissions and OneGuild:CanEditPermissions() or false
 
+    -- Warning if not allowed (compact, one line)
+    local yStart = -30
     if not canEdit then
-        warningText:SetText("Du hast keine Berechtigung, diese Einstellungen\nzu \195\164ndern. Nur Gildenleitung (Rang 0/1) und\nWhitelist k\195\182nnen dies \195\164ndern.")
+        local warningText = content:CreateFontString(nil, "OVERLAY")
+        warningText:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
+        warningText:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -28)
+        warningText:SetWidth(290)
+        warningText:SetJustifyH("LEFT")
+        warningText:SetTextColor(1, 0.3, 0.3)
+        warningText:SetText("Keine Berechtigung \226\128\147 nur Rang 0/1 und Whitelist.")
+        yStart = -44
     end
+
+    Label(content, 0, yStart, "Wer darf DKP bearbeiten / verteilen?", 11, 0.87, 0.78, 0.55)
 
     permRadioButtons = {}
     for i, opt in ipairs(DKP_PERM_OPTIONS) do
-        local yOff = -74 - ((i - 1) * 46)
+        local yOff = (yStart - 20) - ((i - 1) * 42)
 
         local radioBtn = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
         radioBtn:SetPoint("TOPLEFT", content, "TOPLEFT", 4, yOff)
@@ -387,31 +387,32 @@ local function BuildPermissionsTab(content)
     end
 
     -- ================================================================
-    -- WHITELIST SECTION (only editable by guild leader, rank 0)
+    -- WHITELIST SECTION
     -- ================================================================
-    HLine(content, -268)
-    Label(content, 0, -278, "Admin-Whitelist", 13, 1, 0.72, 0)
+    local wlTop = (yStart - 20) - (4 * 42) - 10  -- after 4 radio buttons + gap
+    HLine(content, wlTop)
+    Label(content, 0, wlTop - 8, "Admin-Whitelist", 13, 1, 0.72, 0)
 
     local canEditWL = OneGuild.CanEditWhitelist and OneGuild:CanEditWhitelist() or false
 
     local wlInfoText = content:CreateFontString(nil, "OVERLAY")
     wlInfoText:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
-    wlInfoText:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -296)
-    wlInfoText:SetWidth(280)
+    wlInfoText:SetPoint("TOPLEFT", content, "TOPLEFT", 4, wlTop - 26)
+    wlInfoText:SetWidth(290)
     wlInfoText:SetJustifyH("LEFT")
     if canEditWL then
         wlInfoText:SetTextColor(0.6, 0.5, 0.35)
-        wlInfoText:SetText("Spieler auf der Whitelist haben immer Admin-Rechte.\nNur der Gildenmeister (Rang 0) kann diese Liste bearbeiten.")
+        wlInfoText:SetText("Whitelist = immer Admin-Rechte. Nur Gildenmeister kann bearbeiten.")
     else
         wlInfoText:SetTextColor(0.4, 0.35, 0.2)
-        wlInfoText:SetText("Spieler auf der Whitelist haben immer Admin-Rechte.\n|cFFFF4444Nur der Gildenmeister kann diese Liste bearbeiten.|r")
+        wlInfoText:SetText("Whitelist = immer Admin-Rechte. |cFFFF4444Nur Gildenmeister.|r")
     end
 
     -- Current whitelist display
     local wlListText = content:CreateFontString(nil, "OVERLAY")
     wlListText:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
-    wlListText:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -328)
-    wlListText:SetWidth(280)
+    wlListText:SetPoint("TOPLEFT", content, "TOPLEFT", 4, wlTop - 42)
+    wlListText:SetWidth(290)
     wlListText:SetJustifyH("LEFT")
     wlListText:SetTextColor(0.87, 0.73, 0.4)
 
@@ -428,7 +429,7 @@ local function BuildPermissionsTab(content)
     -- Add player input
     local addBox = CreateFrame("EditBox", nil, content, "BackdropTemplate")
     addBox:SetSize(160, 24)
-    addBox:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -352)
+    addBox:SetPoint("TOPLEFT", content, "TOPLEFT", 4, wlTop - 62)
     addBox:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
