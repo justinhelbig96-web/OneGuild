@@ -76,7 +76,9 @@ local function EnsureEJLoaded()
                     instanceID = instanceID,
                     label      = instName,
                     icon       = buttonImage1 or bgImage or 0,
-                    art        = bgImage or buttonImage1 or 0,
+                    art        = buttonImage1 or bgImage or 0,
+                    bg         = bgImage or buttonImage1 or 0,
+                    lore       = loreImage or 0,
                     buttonArt  = buttonImage2 or buttonImage1 or bgImage or 0,
                 })
                 idx = idx + 1
@@ -834,11 +836,13 @@ end
 ------------------------------------------------------------------------
 -- Create Raid Dialog  (WoW "Schlachtzüge" style)
 ------------------------------------------------------------------------
-local CARD_W   = 155
-local CARD_H   = 110
-local CARD_GAP = 10
-local DIALOG_W = 710
-local DIALOG_H = 510
+local CARD_W   = 170
+local CARD_H   = 100
+local CARD_GAP = 12
+local CARDS_PER_ROW = 4
+local CARDS_AREA_H = 240   -- room for 2 rows
+local DIALOG_W = 760
+local DIALOG_H = 600
 
 function OneGuild:ShowCreateRaidDialog()
     if self.createRaidFrame and self.createRaidFrame:IsShown() then
@@ -910,7 +914,7 @@ function OneGuild:ShowCreateRaidDialog()
 
         local expArrow = expDDBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         expArrow:SetPoint("RIGHT", expDDBtn, "RIGHT", -6, 0)
-        expArrow:SetText("|cFFDDB866\226\150\188|r")
+        expArrow:SetText("|cFFDDB866v|r")
 
         -- Expansion dropdown menu (built dynamically)
         local expMenu = CreateFrame("Frame", "OneGuildExpDropdown", UIParent, "BackdropTemplate")
@@ -959,18 +963,14 @@ function OneGuild:ShowCreateRaidDialog()
                     item:SetBackdropColor(0, 0, 0, 0)
                 end
 
-                -- Radio dot
-                local radio = item:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-                radio:SetPoint("LEFT", 6, 0)
-                if isSelected then
-                    radio:SetText("|cFFFFD700\226\151\137|r")
-                else
-                    radio:SetText("|cFF666666\226\151\139|r")
-                end
-
+                -- Selection indicator (WoW-safe characters)
                 local label = item:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-                label:SetPoint("LEFT", radio, "RIGHT", 4, 0)
-                label:SetText("|cFFDDB866" .. (EXPANSION_LABELS[tierIdx] or "?") .. "|r")
+                label:SetPoint("LEFT", 8, 0)
+                if isSelected then
+                    label:SetText("|cFFFFD700> " .. (EXPANSION_LABELS[tierIdx] or "?") .. "|r")
+                else
+                    label:SetText("|cFFDDB866   " .. (EXPANSION_LABELS[tierIdx] or "?") .. "|r")
+                end
 
                 item:SetScript("OnEnter", function(s) s:SetBackdropColor(0.3, 0.18, 0.05, 0.8) end)
                 item:SetScript("OnLeave", function(s)
@@ -1002,28 +1002,37 @@ function OneGuild:ShowCreateRaidDialog()
         end)
 
         -- ============================================================
-        -- Raid cards area (center, with artwork thumbnails)
+        -- Raid cards area (scrollable grid)
         -- ============================================================
-        local cardsArea = CreateFrame("Frame", nil, f)
-        cardsArea:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -46)
-        cardsArea:SetPoint("TOPRIGHT", f, "TOPRIGHT", -16, -46)
-        cardsArea:SetHeight(CARD_H + 8)
+        local cardsScroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+        cardsScroll:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -46)
+        cardsScroll:SetPoint("TOPRIGHT", f, "TOPRIGHT", -32, -46)
+        cardsScroll:SetHeight(CARDS_AREA_H)
+
+        local cardsArea = CreateFrame("Frame", nil, cardsScroll)
+        cardsArea:SetSize(DIALOG_W - 48, CARDS_AREA_H)
+        cardsScroll:SetScrollChild(cardsArea)
         f.cardsArea = cardsArea
+        f.cardsScroll = cardsScroll
         f.raidCards = {}
+
+        -- Style the scrollbar subtly
+        local sb = cardsScroll.ScrollBar
+        if sb then sb:SetAlpha(0.5) end
 
         -- ============================================================
         -- Separator line below cards
         -- ============================================================
         local sep = f:CreateTexture(nil, "ARTWORK", nil, 2)
         sep:SetHeight(1)
-        sep:SetPoint("TOPLEFT", cardsArea, "BOTTOMLEFT", 0, -8)
-        sep:SetPoint("TOPRIGHT", cardsArea, "BOTTOMRIGHT", 0, -8)
+        sep:SetPoint("TOPLEFT", cardsScroll, "BOTTOMLEFT", 0, -8)
+        sep:SetPoint("TOPRIGHT", cardsScroll, "BOTTOMRIGHT", 16, -8)
         sep:SetColorTexture(0.35, 0.25, 0.08, 0.4)
 
         -- ============================================================
         -- Bottom form area (below cards)
         -- ============================================================
-        local formY = -CARD_H - 64
+        local formY = -CARDS_AREA_H - 64
 
         -- Selected raid display
         local selIcon = f:CreateTexture(nil, "ARTWORK")
@@ -1263,60 +1272,73 @@ function OneGuild:RefreshRaidCards()
         card:Hide()
     end
 
-    -- Calculate centering
-    local totalW = #raids * CARD_W + (#raids - 1) * CARD_GAP
-    local startX = math.max(0, math.floor((area:GetWidth() - totalW) / 2))
-    -- If area width is 0 (first show), use frame width
-    if area:GetWidth() < 10 then
-        startX = math.max(0, math.floor((DIALOG_W - 32 - totalW) / 2))
+    -- Grid layout: CARDS_PER_ROW cards per row
+    local areaW = area:GetWidth()
+    if areaW < 10 then areaW = DIALOG_W - 48 end
+    local perRow = CARDS_PER_ROW
+    local rowCount = math.ceil(#raids / perRow)
+
+    -- Center cards horizontally in each row
+    local function getRowStartX(cardsInRow)
+        local rowW = cardsInRow * CARD_W + (cardsInRow - 1) * CARD_GAP
+        return math.max(0, math.floor((areaW - rowW) / 2))
     end
+
+    -- Resize scroll child to fit all rows
+    local totalH = rowCount * CARD_H + math.max(0, rowCount - 1) * CARD_GAP
+    area:SetHeight(math.max(CARDS_AREA_H, totalH))
 
     for i, raid in ipairs(raids) do
         local card = f.raidCards[i]
         if not card then
-            card = CreateFrame("Button", nil, area, "BackdropTemplate")
+            card = CreateFrame("Button", nil, area)
             card:SetSize(CARD_W, CARD_H)
-            card:SetBackdrop({
-                bgFile   = "Interface\\Buttons\\WHITE8x8",
-                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-                edgeSize = 10,
-                insets   = { left = 2, right = 2, top = 2, bottom = 2 },
-            })
 
-            -- Artwork thumbnail
+            -- Artwork fills the entire card
             card.art = card:CreateTexture(nil, "ARTWORK")
-            card.art:SetPoint("TOPLEFT", card, "TOPLEFT", 3, -3)
-            card.art:SetPoint("TOPRIGHT", card, "TOPRIGHT", -3, -3)
-            card.art:SetHeight(CARD_H - 30)
+            card.art:SetPoint("TOPLEFT", card, "TOPLEFT", 4, -4)
+            card.art:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -4, 4)
 
-            -- Dark gradient at bottom of art
+            -- Golden border frame around the card (like WoW EJ)
+            card.border = CreateFrame("Frame", nil, card, "BackdropTemplate")
+            card.border:SetAllPoints()
+            card.border:SetBackdrop({
+                edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
+                edgeSize = 16,
+                insets   = { left = 4, right = 4, top = 4, bottom = 4 },
+            })
+            card.border:SetBackdropBorderColor(0.7, 0.55, 0.2, 0.9)
+
+            -- Dark gradient at bottom for text readability
             card.grad = card:CreateTexture(nil, "ARTWORK", nil, 2)
             card.grad:SetPoint("BOTTOMLEFT", card.art, "BOTTOMLEFT")
             card.grad:SetPoint("BOTTOMRIGHT", card.art, "BOTTOMRIGHT")
             card.grad:SetHeight(30)
-            card.grad:SetColorTexture(0, 0, 0, 0.5)
+            card.grad:SetColorTexture(0, 0, 0, 0.65)
 
-            -- Raid name
-            card.label = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            card.label:SetPoint("BOTTOM", card, "BOTTOM", 0, 6)
-            card.label:SetWidth(CARD_W - 10)
+            -- Raid name overlaid on artwork
+            card.label = card:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            card.label:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT", 8, 8)
+            card.label:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -8, 8)
             card.label:SetJustifyH("CENTER")
-            card.label:SetWordWrap(false)
+            card.label:SetWordWrap(true)
+            card.label:SetMaxLines(2)
 
             -- Selected glow border (highlight texture)
             card.glow = card:CreateTexture(nil, "OVERLAY")
-            card.glow:SetAllPoints()
-            card.glow:SetColorTexture(0.8, 0.6, 0.1, 0.15)
+            card.glow:SetPoint("TOPLEFT", 4, -4)
+            card.glow:SetPoint("BOTTOMRIGHT", -4, 4)
+            card.glow:SetColorTexture(0.8, 0.6, 0.1, 0.2)
             card.glow:Hide()
 
             card:SetScript("OnEnter", function(self)
                 if f.selectedDungeon ~= self.raidKey then
-                    self:SetBackdropBorderColor(0.8, 0.6, 0.1, 0.9)
+                    self.border:SetBackdropBorderColor(1, 0.82, 0.3, 1)
                 end
             end)
             card:SetScript("OnLeave", function(self)
                 if f.selectedDungeon ~= self.raidKey then
-                    self:SetBackdropBorderColor(0.4, 0.3, 0.1, 0.4)
+                    self.border:SetBackdropBorderColor(0.7, 0.55, 0.2, 0.9)
                 end
             end)
             card:SetScript("OnClick", function(self)
@@ -1340,9 +1362,13 @@ function OneGuild:RefreshRaidCards()
         card.raidLabel = raid.label
         card.raidIcon  = raid.icon
 
-        card:SetPoint("TOPLEFT", area, "TOPLEFT", startX + (i - 1) * (CARD_W + CARD_GAP), 0)
-        card:SetBackdropColor(0.06, 0.03, 0.03, 0.9)
-        card:SetBackdropBorderColor(0.4, 0.3, 0.1, 0.4)
+        local row = math.floor((i - 1) / perRow)
+        local col = (i - 1) % perRow
+        local cardsThisRow = math.min(perRow, #raids - row * perRow)
+        local sx = getRowStartX(cardsThisRow)
+        card:ClearAllPoints()
+        card:SetPoint("TOPLEFT", area, "TOPLEFT", sx + col * (CARD_W + CARD_GAP), -(row * (CARD_H + CARD_GAP)))
+        card.border:SetBackdropBorderColor(0.7, 0.55, 0.2, 0.9)
 
         -- Use real EJ artwork (numeric fileID or path)
         local artTex = raid.art or raid.icon or 0
@@ -1370,10 +1396,10 @@ function OneGuild:RefreshRaidCardHighlights()
     for _, card in ipairs(f.raidCards) do
         if card:IsShown() then
             if f.selectedDungeon == card.raidKey then
-                card:SetBackdropBorderColor(1, 0.8, 0.2, 1)
+                card.border:SetBackdropBorderColor(1, 0.85, 0.2, 1)
                 card.glow:Show()
             else
-                card:SetBackdropBorderColor(0.4, 0.3, 0.1, 0.4)
+                card.border:SetBackdropBorderColor(0.7, 0.55, 0.2, 0.9)
                 card.glow:Hide()
             end
         end
