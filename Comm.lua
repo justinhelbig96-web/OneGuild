@@ -235,7 +235,7 @@ end
 -- SendSingleRaid  (used on create and on sync)
 ------------------------------------------------------------------------
 function OneGuild:SendSingleRaid(rd)
-    -- Format: title|dateStr|timeStr|description|difficulty|dungeon|author|created|timestamp
+    -- Format: title|dateStr|timeStr|description|difficulty|dungeon|author|created|timestamp|lootmeister
     local p = {
         rd.title or "?",
         rd.dateStr or "",
@@ -246,6 +246,7 @@ function OneGuild:SendSingleRaid(rd)
         rd.author or "?",
         tostring(rd.created or 0),
         tostring(rd.timestamp or 0),
+        rd.lootmeister or "",
     }
     self:SendCommMessage(MSG_RAID, table.concat(p, "|"))
 end
@@ -457,7 +458,7 @@ function OneGuild:ProcessRaid(sender, data)
     if not data or not self.db then return end
     if not self.db.raids then self.db.raids = {} end
 
-    local title, dateStr, timeStr, desc, diff, dungeon, author, createdStr, tsStr =
+    local title, dateStr, timeStr, desc, diff, dungeon, author, createdStr, tsStr, lootmeister =
         strsplit("|", data)
 
     local created = tonumber(createdStr) or 0
@@ -480,6 +481,7 @@ function OneGuild:ProcessRaid(sender, data)
             rd.difficulty  = diff or rd.difficulty
             rd.dungeon     = (dungeon and dungeon ~= "") and dungeon or rd.dungeon
             rd.timestamp   = tonumber(tsStr) or rd.timestamp
+            rd.lootmeister = (lootmeister and lootmeister ~= "") and lootmeister or rd.lootmeister
             if self.RefreshRaid then self:RefreshRaid() end
             return
         end
@@ -494,6 +496,7 @@ function OneGuild:ProcessRaid(sender, data)
         timestamp   = tonumber(tsStr) or 0,
         difficulty  = diff or "normal",
         dungeon     = (dungeon and dungeon ~= "") and dungeon or nil,
+        lootmeister = (lootmeister and lootmeister ~= "") and lootmeister or nil,
         author      = author or sender,
         created     = created,
         signups     = {},

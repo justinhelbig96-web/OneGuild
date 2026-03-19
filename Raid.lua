@@ -9,7 +9,7 @@ local _, OneGuild = ...
 ------------------------------------------------------------------------
 -- Constants
 ------------------------------------------------------------------------
-local RAID_ROW_HEIGHT = 80
+local RAID_ROW_HEIGHT = 120
 local MAX_RAID_ROWS   = 5
 
 -- Role icon texture (LFGFrame, 64x64)
@@ -161,6 +161,23 @@ local function GetPlayerRaidSignup(signups, playerName)
         return s.status or "none", s.role
     end
     return s, nil
+end
+
+------------------------------------------------------------------------
+-- Helper: group signed-up players by role
+------------------------------------------------------------------------
+local function GetSignupPlayersByRole(signups)
+    local roleNames = { TANK = {}, HEALER = {}, DD = {} }
+    if not signups then return roleNames end
+    for name, s in pairs(signups) do
+        if type(s) == "table" and s.status == "accepted" and s.role then
+            if roleNames[s.role] then
+                local short = strsplit("-", name)
+                table.insert(roleNames[s.role], short)
+            end
+        end
+    end
+    return roleNames
 end
 
 ------------------------------------------------------------------------
@@ -353,6 +370,19 @@ function OneGuild:BuildRaidTab()
         -- Player status
         row.statusText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row.statusText:SetPoint("TOPRIGHT", row.totalText, "BOTTOMRIGHT", 0, -2)
+
+        -- Lootmeister display (next to leader)
+        row.lootmeisterText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.lootmeisterText:SetPoint("LEFT", row.leaderText, "RIGHT", 12, 0)
+        row.lootmeisterText:SetTextColor(1, 0.53, 0)
+
+        -- Signed-up player names (below buttons)
+        row.signupNamesText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.signupNamesText:SetPoint("TOPLEFT", row, "TOPLEFT", 48, -80)
+        row.signupNamesText:SetPoint("RIGHT", row, "RIGHT", -10, 0)
+        row.signupNamesText:SetJustifyH("LEFT")
+        row.signupNamesText:SetWordWrap(true)
+        row.signupNamesText:SetMaxLines(3)
 
         -- === Signup buttons (bottom row) ===
         local btnY  = -54
@@ -598,6 +628,31 @@ function OneGuild:RefreshRaid()
             end
             row.statusText:SetText("|cFF8B7355Du:|r " .. statusStr .. "|r")
 
+            -- Lootmeister
+            if data.lootmeister and data.lootmeister ~= "" then
+                row.lootmeisterText:SetText("|cFF8B7355LM:|r |cFFFF8800" .. data.lootmeister .. "|r")
+                row.lootmeisterText:Show()
+            else
+                row.lootmeisterText:Hide()
+            end
+
+            -- Signed-up player names
+            local roleNames = GetSignupPlayersByRole(signups)
+            local parts = {}
+            for _, rn in ipairs(ROLE_ORDER) do
+                if #roleNames[rn] > 0 then
+                    local names = table.concat(roleNames[rn], ", ")
+                    parts[#parts + 1] = "|cFFDDB866" .. ROLE_LABELS[rn] .. ":|r |cFFFFFFFF" .. names .. "|r"
+                end
+            end
+            if #parts > 0 then
+                row.signupNamesText:SetText("|cFF8B7355Spieler:|r  " .. table.concat(parts, "  |cFF555555-|r  "))
+                row.signupNamesText:Show()
+            else
+                row.signupNamesText:SetText("")
+                row.signupNamesText:Hide()
+            end
+
             -- Highlight active role button
             for _, role in ipairs(ROLE_ORDER) do
                 local rb = row.roleButtons[role]
@@ -836,13 +891,13 @@ end
 ------------------------------------------------------------------------
 -- Create Raid Dialog  (WoW "Schlachtzüge" style)
 ------------------------------------------------------------------------
-local CARD_W   = 170
-local CARD_H   = 100
+local CARD_W   = 195
+local CARD_H   = 115
 local CARD_GAP = 12
 local CARDS_PER_ROW = 4
-local CARDS_AREA_H = 240   -- room for 2 rows
-local DIALOG_W = 760
-local DIALOG_H = 600
+local CARDS_AREA_H = 260   -- room for 2 rows
+local DIALOG_W = 850
+local DIALOG_H = 630
 
 function OneGuild:ShowCreateRaidDialog()
     if self.createRaidFrame and self.createRaidFrame:IsShown() then
@@ -1171,6 +1226,18 @@ function OneGuild:ShowCreateRaidDialog()
             diffX = diffX + 96
         end
 
+        -- Lootmeister (right of difficulty buttons)
+        local lmLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        lmLabel:SetPoint("LEFT", diffLabel, "LEFT", 310, 0)
+        lmLabel:SetText("|cFFFF8800Lootmeister (optional):|r")
+
+        local lmBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+        lmBox:SetSize(200, 22)
+        lmBox:SetPoint("TOPLEFT", lmLabel, "BOTTOMLEFT", 4, -4)
+        lmBox:SetAutoFocus(false)
+        lmBox:SetMaxLetters(50)
+        f.lmBox = lmBox
+
         -- Notes
         local descLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         descLabel:SetPoint("TOPLEFT", diffLabel, "BOTTOMLEFT", 0, -34)
@@ -1230,6 +1297,7 @@ function OneGuild:ShowCreateRaidDialog()
     f.dateBox:SetText(date("%d.%m.%Y"))
     f.timeBox:SetText("20:00")
     f.descBox:SetText("")
+    f.lmBox:SetText("")
     f.selectedDiff      = "normal"
     f.selectedDungeon   = nil
     f.selectedExpansion  = CURRENT_TIER or 1
@@ -1294,10 +1362,9 @@ function OneGuild:RefreshRaidCards()
             card = CreateFrame("Button", nil, area)
             card:SetSize(CARD_W, CARD_H)
 
-            -- Artwork fills the entire card
+            -- One single artwork texture, fills entire card
             card.art = card:CreateTexture(nil, "ARTWORK")
-            card.art:SetPoint("TOPLEFT", card, "TOPLEFT", 4, -4)
-            card.art:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -4, 4)
+            card.art:SetAllPoints(card)
 
             -- Golden border frame around the card (like WoW EJ)
             card.border = CreateFrame("Frame", nil, card, "BackdropTemplate")
@@ -1311,8 +1378,8 @@ function OneGuild:RefreshRaidCards()
 
             -- Dark gradient at bottom for text readability
             card.grad = card:CreateTexture(nil, "ARTWORK", nil, 2)
-            card.grad:SetPoint("BOTTOMLEFT", card.art, "BOTTOMLEFT")
-            card.grad:SetPoint("BOTTOMRIGHT", card.art, "BOTTOMRIGHT")
+            card.grad:SetPoint("BOTTOMLEFT", card, "BOTTOMLEFT")
+            card.grad:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT")
             card.grad:SetHeight(30)
             card.grad:SetColorTexture(0, 0, 0, 0.65)
 
@@ -1370,10 +1437,10 @@ function OneGuild:RefreshRaidCards()
         card:SetPoint("TOPLEFT", area, "TOPLEFT", sx + col * (CARD_W + CARD_GAP), -(row * (CARD_H + CARD_GAP)))
         card.border:SetBackdropBorderColor(0.7, 0.55, 0.2, 0.9)
 
-        -- Use real EJ artwork (numeric fileID or path)
-        local artTex = raid.art or raid.icon or 0
-        card.art:SetTexture(artTex)
+        -- 1:1 artwork from EJ, no filter, no crop
+        card.art:SetTexture(raid.art or raid.icon or 0)
         card.art:SetTexCoord(0, 1, 0, 1)
+        card.art:SetDesaturated(false)
         card.label:SetText("|cFFFFD700" .. raid.label .. "|r")
         card.glow:Hide()
         card:Show()
@@ -1419,6 +1486,7 @@ function OneGuild:CreateRaidFromDialog()
     local desc = strtrim(f.descBox:GetText() or "")
     local diff = f.selectedDiff or "normal"
     local dungeon = f.selectedDungeon
+    local lootmeister = strtrim(f.lmBox:GetText() or "")
 
     if title == "" then
         self:PrintError("Bitte gib einen Raid-Namen ein!")
@@ -1451,6 +1519,7 @@ function OneGuild:CreateRaidFromDialog()
         timestamp   = timestamp,
         difficulty  = diff,
         dungeon     = dungeon,
+        lootmeister = lootmeister,
         author      = self:GetPlayerName(),
         created     = time(),
         signups     = {},
