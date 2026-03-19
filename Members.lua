@@ -578,6 +578,127 @@ function OneGuild:BuildMembersTab()
         "und das Addon installiert haben.\n\n" ..
         "|cFFDDB866Auch offline Mitglieder werden hier angezeigt.|r")
     parent.emptyText = emptyText
+
+    -- =================================================================
+    -- DKP Export button (bottom right of header bar)
+    -- =================================================================
+    local exportBtn = CreateFrame("Button", nil, headerBar, "BackdropTemplate")
+    exportBtn:SetSize(80, 24)
+    exportBtn:SetPoint("RIGHT", countText, "LEFT", -12, 0)
+    exportBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    exportBtn:SetBackdropColor(0.15, 0.3, 0.15, 0.9)
+    exportBtn:SetBackdropBorderColor(0.3, 0.6, 0.3, 0.6)
+    local expText = exportBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    expText:SetPoint("CENTER")
+    expText:SetText("|cFF66FF66Export|r")
+    exportBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(0.2, 0.4, 0.2, 1) end)
+    exportBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(0.15, 0.3, 0.15, 0.9) end)
+    exportBtn:SetScript("OnClick", function()
+        OneGuild:ShowDKPExport()
+    end)
+end
+
+------------------------------------------------------------------------
+-- DKP Export popup (copyable text)
+------------------------------------------------------------------------
+function OneGuild:ShowDKPExport()
+    -- Build export text
+    local lines = {}
+    table.insert(lines, "OneGuild DKP Export - " .. date("%Y-%m-%d %H:%M:%S"))
+    table.insert(lines, "==================================================")
+    table.insert(lines, "")
+
+    local members = self:GetAllAddonMembers()
+    if members and #members > 0 then
+        -- Sort by DKP descending
+        table.sort(members, function(a, b)
+            return GetDKP(a) > GetDKP(b)
+        end)
+        for _, m in ipairs(members) do
+            local name = m.mainName or m.sender or "?"
+            local dkp = GetDKP(m)
+            table.insert(lines, name .. "\t" .. tostring(dkp) .. " DKP")
+        end
+    else
+        table.insert(lines, "Keine Mitglieder gefunden.")
+    end
+
+    local exportStr = table.concat(lines, "\n")
+
+    -- Create or reuse export frame
+    if not self.dkpExportFrame then
+        local ef = CreateFrame("Frame", "OneGuildDKPExport", UIParent, "BackdropTemplate")
+        ef:SetSize(450, 350)
+        ef:SetPoint("CENTER")
+        ef:SetFrameStrata("DIALOG")
+        ef:SetFrameLevel(200)
+        ef:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 12,
+            insets   = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        ef:SetBackdropColor(0.05, 0.03, 0.02, 0.95)
+        ef:SetBackdropBorderColor(0.5, 0.35, 0.1, 0.8)
+        ef:SetMovable(true)
+        ef:EnableMouse(true)
+        ef:RegisterForDrag("LeftButton")
+        ef:SetScript("OnDragStart", ef.StartMoving)
+        ef:SetScript("OnDragStop", ef.StopMovingOrSizing)
+
+        local title = ef:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        title:SetPoint("TOP", ef, "TOP", 0, -10)
+        title:SetText("|cFFFFD700DKP Export|r")
+
+        local hint = ef:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        hint:SetPoint("TOP", title, "BOTTOM", 0, -4)
+        hint:SetText("|cFF888888Strg+A zum Markieren, Strg+C zum Kopieren|r")
+
+        -- ScrollFrame + EditBox for copyable text
+        local sf = CreateFrame("ScrollFrame", "OneGuildDKPExportScroll", ef, "UIPanelScrollFrameTemplate")
+        sf:SetPoint("TOPLEFT", ef, "TOPLEFT", 12, -48)
+        sf:SetPoint("BOTTOMRIGHT", ef, "BOTTOMRIGHT", -30, 40)
+
+        local editBox = CreateFrame("EditBox", nil, sf)
+        editBox:SetMultiLine(true)
+        editBox:SetFontObject("GameFontHighlightSmall")
+        editBox:SetWidth(sf:GetWidth() or 400)
+        editBox:SetAutoFocus(false)
+        editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        sf:SetScrollChild(editBox)
+
+        ef.editBox = editBox
+
+        -- Close button
+        local closeBtn = CreateFrame("Button", nil, ef, "BackdropTemplate")
+        closeBtn:SetSize(100, 26)
+        closeBtn:SetPoint("BOTTOM", ef, "BOTTOM", 0, 8)
+        closeBtn:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 8,
+            insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+        })
+        closeBtn:SetBackdropColor(0.3, 0.15, 0.05, 0.9)
+        closeBtn:SetBackdropBorderColor(0.6, 0.35, 0.1, 0.6)
+        local clText = closeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        clText:SetPoint("CENTER")
+        clText:SetText("|cFFFFD700Schliessen|r")
+        closeBtn:SetScript("OnClick", function() ef:Hide() end)
+
+        ef:Hide()
+        self.dkpExportFrame = ef
+    end
+
+    local ef = self.dkpExportFrame
+    ef.editBox:SetText(exportStr)
+    ef.editBox:HighlightText()
+    ef:Show()
 end
 
 ------------------------------------------------------------------------

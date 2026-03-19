@@ -202,15 +202,28 @@ end
 
 local function StopDrag()
     if dragPlayerName then
-        -- Check if dropped on a group panel
+        -- Check individual cells first for slot-specific placement
         for g = 1, MAX_GROUPS do
             local panel = groupPanels[g]
-            if panel and panel:IsMouseOver() then
-                MoveToGroup(dragPlayerName, g)
-                dragPlayerName  = nil
-                dragPlayerClass = nil
-                if dragFrame then dragFrame:Hide() end
-                return
+            if panel then
+                for s = 1, MAX_PER_GROUP do
+                    local cell = panel.cells[s]
+                    if cell and cell:IsMouseOver() then
+                        MoveToGroup(dragPlayerName, g, s)
+                        dragPlayerName  = nil
+                        dragPlayerClass = nil
+                        if dragFrame then dragFrame:Hide() end
+                        return
+                    end
+                end
+                -- Fallback: dropped on group panel header/border area
+                if panel:IsMouseOver() then
+                    MoveToGroup(dragPlayerName, g)
+                    dragPlayerName  = nil
+                    dragPlayerClass = nil
+                    if dragFrame then dragFrame:Hide() end
+                    return
+                end
             end
         end
         -- Check if dropped on roster panel (remove from group)
