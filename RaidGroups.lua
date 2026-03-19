@@ -362,19 +362,31 @@ function OneGuild:BuildRaidGroupsFrame()
         wipe(f.lmMenuItems)
 
         local curRaidIdx = OneGuild.currentRaidIdx
+        -- Fallback: pick first raid if none selected
+        if not curRaidIdx and OneGuild.db and OneGuild.db.raids then
+            for idx, _ in ipairs(OneGuild.db.raids) do
+                curRaidIdx = idx
+                OneGuild.currentRaidIdx = idx
+                break
+            end
+        end
+
         local entries = {}
         -- "None" option
         table.insert(entries, { name = "", display = "|cFF888888-- keiner --|r" })
-        if curRaidIdx and OneGuild.db and OneGuild.db.raids and OneGuild.db.raids[curRaidIdx] then
-            local rd = OneGuild.db.raids[curRaidIdx]
+        local rd = curRaidIdx and OneGuild.db and OneGuild.db.raids and OneGuild.db.raids[curRaidIdx]
+        if rd then
             local sigs = rd.signups or {}
             for sName, sData in pairs(sigs) do
-                if type(sData) == "table" and sData.status == "accepted" then
+                local st = type(sData) == "table" and sData.status or sData
+                -- Accept any signup that isn't declined/withdrawn
+                if st and st ~= "declined" and st ~= "withdrawn" and st ~= "none" then
                     local short = strsplit("-", sName)
                     table.insert(entries, { name = short, display = "|cFFFFD700" .. short .. "|r" })
                 end
             end
         end
+        print("|cFFFFB800[OneGuild]|r LM dropdown: raidIdx=" .. tostring(curRaidIdx) .. ", entries=" .. #entries)
 
         local itemH = 20
         lmMenu:SetSize(160, #entries * itemH + 8)
@@ -728,13 +740,14 @@ function OneGuild:RefreshRaidGroups()
     -- Get signups from selected raid (exclude grouped)
     if rd then
         for name, s in pairs(signups) do
-            if type(s) == "table" and s.status == "accepted" then
+            local st = type(s) == "table" and s.status or s
+            if st and st ~= "declined" and st ~= "withdrawn" and st ~= "none" then
                 local short = strsplit("-", name)
                 if not groupedNames[name] and not groupedNames[short] then
                     table.insert(rosterEntries, {
                         name      = name,
                         shortName = short,
-                        role      = s.role or "DD",
+                        role      = (type(s) == "table" and s.role) or "DD",
                         classFile = classLookup[name] or classLookup[short],
                         isSignup  = true,
                     })
