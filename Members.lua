@@ -360,9 +360,30 @@ function OneGuild:BuildMembersTab()
 
     -- Member count
     local countText = headerBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    countText:SetPoint("RIGHT", headerBar, "RIGHT", -10, 0)
+    countText:SetPoint("RIGHT", headerBar, "RIGHT", -100, 0)
     countText:SetText("|cFF8B73550 Mitglieder|r")
     parent.countText = countText
+
+    -- DKP Export button (right side of header)
+    local exportBtn = CreateFrame("Button", nil, headerBar, "BackdropTemplate")
+    exportBtn:SetSize(80, 24)
+    exportBtn:SetPoint("RIGHT", headerBar, "RIGHT", -10, 0)
+    exportBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    exportBtn:SetBackdropColor(0.15, 0.3, 0.15, 0.9)
+    exportBtn:SetBackdropBorderColor(0.3, 0.6, 0.3, 0.6)
+    local expText = exportBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    expText:SetPoint("CENTER")
+    expText:SetText("|cFF66FF66Export|r")
+    exportBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(0.2, 0.4, 0.2, 1) end)
+    exportBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(0.15, 0.3, 0.15, 0.9) end)
+    exportBtn:SetScript("OnClick", function()
+        OneGuild:ShowDKPExport()
+    end)
 
     -- Column headers
     local colHeader = CreateFrame("Frame", nil, parent, "BackdropTemplate")
@@ -577,31 +598,7 @@ function OneGuild:BuildMembersTab()
         "Mitglieder werden gespeichert sobald sie online waren\n" ..
         "und das Addon installiert haben.\n\n" ..
         "|cFFDDB866Auch offline Mitglieder werden hier angezeigt.|r")
-    parent.emptyText = emptyText
-
-    -- =================================================================
-    -- DKP Export button (bottom right of header bar)
-    -- =================================================================
-    local exportBtn = CreateFrame("Button", nil, headerBar, "BackdropTemplate")
-    exportBtn:SetSize(80, 24)
-    exportBtn:SetPoint("RIGHT", countText, "LEFT", -12, 0)
-    exportBtn:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 8,
-        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
-    })
-    exportBtn:SetBackdropColor(0.15, 0.3, 0.15, 0.9)
-    exportBtn:SetBackdropBorderColor(0.3, 0.6, 0.3, 0.6)
-    local expText = exportBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    expText:SetPoint("CENTER")
-    expText:SetText("|cFF66FF66Export|r")
-    exportBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(0.2, 0.4, 0.2, 1) end)
-    exportBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(0.15, 0.3, 0.15, 0.9) end)
-    exportBtn:SetScript("OnClick", function()
-        OneGuild:ShowDKPExport()
-    end)
-end
+    parent.emptyText = emptyText\nend
 
 ------------------------------------------------------------------------
 -- DKP Export popup (copyable text)

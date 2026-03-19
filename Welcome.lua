@@ -74,7 +74,7 @@ end
 ------------------------------------------------------------------------
 local function CreateFeatureCard(parent, icon, title, desc, xOff, yOff, delay)
     local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    card:SetSize(170, 100)
+    card:SetSize(180, 110)
     card:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -152,7 +152,7 @@ function OneGuild:ShowWelcomeScreen()
 
     -- Main content container
     local container = CreateFrame("Frame", nil, overlay, "BackdropTemplate")
-    container:SetSize(620, 520)
+    container:SetSize(640, 540)
     container:SetPoint("CENTER", overlay, "CENTER", 0, 10)
     container:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8x8",
@@ -216,8 +216,8 @@ function OneGuild:ShowWelcomeScreen()
 
     -- Feature cards area
     local cardsArea = CreateFrame("Frame", nil, container)
-    cardsArea:SetPoint("TOPLEFT", container, "TOPLEFT", 20, -245)
-    cardsArea:SetPoint("BOTTOMRIGHT", container, "BOTTOMRIGHT", -20, 80)
+    cardsArea:SetPoint("TOPLEFT", container, "TOPLEFT", 15, -245)
+    cardsArea:SetPoint("BOTTOMRIGHT", container, "BOTTOMRIGHT", -15, 80)
 
     CreateFeatureCard(cardsArea,
         "Interface\\Icons\\INV_Misc_GroupLooking",
@@ -229,31 +229,31 @@ function OneGuild:ShowWelcomeScreen()
         "Interface\\Icons\\INV_Misc_Note_01",
         "Event-Planer",
         "Raids & Events planen mit Zu- und Absage-System.",
-        190, 0, 1.1)
+        195, 0, 1.1)
 
     CreateFeatureCard(cardsArea,
         "Interface\\Icons\\INV_Letter_15",
         "Notizen & MOTD",
         "Gilden-Notizen erstellen und MOTD im Blick behalten.",
-        380, 0, 1.3)
+        390, 0, 1.3)
 
     CreateFeatureCard(cardsArea,
         "Interface\\Icons\\Achievement_Character_Human_Male",
         "Meine Chars",
         "Alle Charaktere automatisch erfassen & Main festlegen.",
-        0, -115, 1.5)
+        0, -125, 1.5)
 
     CreateFeatureCard(cardsArea,
         "Interface\\Icons\\INV_Misc_Tournaments_banner_Orc",
         "Gilde & Communitys",
         "Eigener Tab im Gilden-Fenster (J) fuer schnellen Zugriff.",
-        190, -115, 1.7)
+        195, -125, 1.7)
 
     CreateFeatureCard(cardsArea,
         "Interface\\Icons\\Spell_Holy_ChampionsBond",
         "Exklusiv <" .. OneGuild.REQUIRED_GUILD .. ">",
         "Guild-Lock: Nur fuer Mitglieder deiner Gilde.",
-        380, -115, 1.9)
+        390, -125, 1.9)
 
     -- Bottom area
     local bottomBar = CreateFrame("Frame", nil, container)

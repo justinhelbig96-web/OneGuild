@@ -1020,26 +1020,39 @@ function OneGuild:ProcessDKP(sender, data)
     if not data or not self.db then return end
     if not self.db.dkp then self.db.dkp = {} end
 
-    -- Only accept DKP from admin/whitelist senders
+    -- Only accept DKP from trusted senders
     local senderShort = strsplit("-", sender)
     local isAdmin = false
-    if self.ADMIN_WHITELIST and (self.ADMIN_WHITELIST[sender] or self.ADMIN_WHITELIST[senderShort]) then
-        isAdmin = true
+
+    -- 1) Accept from self always
+    local myName = UnitName("player") or ""
+    if sender == myName or senderShort == myName then isAdmin = true end
+
+    -- 2) Check ADMIN_WHITELIST
+    if not isAdmin and self.ADMIN_WHITELIST then
+        if self.ADMIN_WHITELIST[sender] or self.ADMIN_WHITELIST[senderShort] then
+            isAdmin = true
+        end
     end
-    -- Also check if sender is guild leader by looking at addonMembers
-    if not isAdmin and self.db.addonMembers then
-        local info = self.db.addonMembers[sender]
-        if not info then
-            for k, v in pairs(self.db.addonMembers) do
-                local ks = strsplit("-", k)
-                if ks == senderShort then info = v; break end
+
+    -- 3) Check guild roster: guild leader (rank 0) or officers (rank 1)
+    if not isAdmin and IsInGuild() then
+        local numGuild = GetNumGuildMembers() or 0
+        for i = 1, numGuild do
+            local gName, _, rankIdx = GetGuildRosterInfo(i)
+            if gName then
+                local gs = strsplit("-", gName)
+                if gs == senderShort or gName == sender then
+                    if rankIdx and rankIdx <= 1 then
+                        isAdmin = true
+                    end
+                    break
+                end
             end
         end
     end
-    -- Accept from self always
-    local myName = UnitName("player") or ""
-    if sender == myName or senderShort == myName then isAdmin = true end
-    -- Accept from anyone who is RL or Assist (check raid roster)
+
+    -- 4) Check raid RL or Assist
     if not isAdmin and IsInRaid() then
         local numRaid = GetNumGroupMembers() or 0
         for i = 1, numRaid do
@@ -1053,6 +1066,7 @@ function OneGuild:ProcessDKP(sender, data)
             end
         end
     end
+
     if not isAdmin then return end  -- ignore DKP from non-admins
 
     local memberKey, dkpStr = strsplit("|", data)

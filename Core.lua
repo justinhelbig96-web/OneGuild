@@ -18,7 +18,7 @@ OneGuild.REQUIRED_GUILD = "One"
 ------------------------------------------------------------------------
 -- Version & Constants
 ------------------------------------------------------------------------
-OneGuild.VERSION = "1.0.4"
+OneGuild.VERSION = "1.0.5"
 
 ------------------------------------------------------------------------
 -- Admin Whitelist  –  Characters listed here get auto-admin rights.
