@@ -1,0 +1,23 @@
+## Interface: 120001
+## Title: |cFFFFB800OneGuild|r - Guild Manager
+## Notes: Guild management addon exclusively for <One>. Roster, Events, MOTD & more.
+## Author: OneGuild
+## Version: 1.0.0
+## IconTexture: Interface\Icons\Achievement_GuildPerk_EverybodysFriend
+## SavedVariables: OneGuildDB
+## DefaultState: enabled
+
+Core.lua
+Comm.lua
+Map.lua
+Loot.lua
+RaidGroups.lua
+Settings.lua
+Characters.lua
+Welcome.lua
+GuildTab.lua
+UI.lua
+Members.lua
+Events.lua
+Raid.lua
+Notes.lua
