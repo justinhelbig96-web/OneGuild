@@ -1282,6 +1282,11 @@ function OneGuild:ProcessDKP(sender, data)
     -- Use centralized setter (stores under ALL known keys + timestamp)
     self:SetDKPForPlayer(memberKey, dkpVal, incomingTs > 0 and incomingTs or nil)
 
+    -- Visible confirmation so players know DKP was received
+    local short = strsplit("-", memberKey)
+    local senderShortName = strsplit("-", sender)
+    self:Print(OneGuild.COLORS.SUCCESS .. "DKP empfangen: " .. short .. " = " .. tostring(dkpVal) .. " (von " .. senderShortName .. ")|r")
+
     -- Debounced UI refresh: collect all DKP updates and refresh once
     self:ScheduleDKPRefresh()
 end
@@ -1295,11 +1300,13 @@ do
     function OneGuild:ScheduleDKPRefresh()
         if refreshPending then return end
         refreshPending = true
-        C_Timer.After(0.15, function()
+        C_Timer.After(0.3, function()
             refreshPending = false
             if OneGuild.RefreshMembers    then OneGuild:RefreshMembers()    end
             if OneGuild.RefreshDKPLoot    then OneGuild:RefreshDKPLoot()    end
             if OneGuild.UpdateMemberRows  then OneGuild:UpdateMemberRows()  end
+            -- Also refresh DKP distribution window if open
+            if OneGuild.RefreshDKPDistribution then OneGuild:RefreshDKPDistribution() end
         end)
     end
 end

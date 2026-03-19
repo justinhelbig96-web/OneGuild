@@ -2119,12 +2119,14 @@ function OneGuild:ApplyDKPToSelected(amount)
         end
     end
 
-    -- Send all DKP updates immediately — WoW's internal message queue
-    -- handles throttling; receivers use debounced refresh (0.15s)
-    for _, upd in ipairs(updates) do
-        if self.SendDKPUpdate then
-            self:SendDKPUpdate(upd.name, upd.dkp)
-        end
+    -- Send DKP updates with minimal stagger to avoid WoW addon message throttle
+    -- (sending too fast can cause silent message drops)
+    for idx, upd in ipairs(updates) do
+        C_Timer.After((idx - 1) * 0.05, function()
+            if OneGuild.SendDKPUpdate then
+                OneGuild:SendDKPUpdate(upd.name, upd.dkp)
+            end
+        end)
     end
 
     if applied > 0 then
