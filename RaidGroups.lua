@@ -76,6 +76,10 @@ local dragFrame       = nil  -- floating drag indicator
 local dragPlayerName  = nil  -- name being dragged
 local dragPlayerClass = nil  -- class of player being dragged
 
+-- Forward declarations
+local MoveToGroup
+local RemoveFromGroup
+
 ------------------------------------------------------------------------
 -- Get current raid roster grouped
 ------------------------------------------------------------------------
@@ -211,7 +215,7 @@ end
 ------------------------------------------------------------------------
 -- Move player to group (addon-managed)
 ------------------------------------------------------------------------
-local function MoveToGroup(playerName, targetGroup)
+MoveToGroup = function(playerName, targetGroup)
     local raidIdx = OneGuild.currentRaidIdx
     if not raidIdx or not OneGuild.db or not OneGuild.db.raids then return end
     local rd = OneGuild.db.raids[raidIdx]
@@ -241,7 +245,7 @@ end
 ------------------------------------------------------------------------
 -- Remove player from all groups (back to roster)
 ------------------------------------------------------------------------
-local function RemoveFromGroup(playerName)
+RemoveFromGroup = function(playerName)
     local raidIdx = OneGuild.currentRaidIdx
     if not raidIdx or not OneGuild.db or not OneGuild.db.raids then return end
     local rd = OneGuild.db.raids[raidIdx]
