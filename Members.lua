@@ -598,7 +598,8 @@ function OneGuild:BuildMembersTab()
         "Mitglieder werden gespeichert sobald sie online waren\n" ..
         "und das Addon installiert haben.\n\n" ..
         "|cFFDDB866Auch offline Mitglieder werden hier angezeigt.|r")
-    parent.emptyText = emptyText\nend
+    parent.emptyText = emptyText
+end
 
 ------------------------------------------------------------------------
 -- DKP Export popup (copyable text)
