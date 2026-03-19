@@ -81,7 +81,13 @@ function OneGuild:InitComm()
     end)
 
     -- Push all local DKP to officer notes (in case they got out of sync)
-    C_Timer.After(10, function()
+    -- Request roster first at 8s, then push at 12s when data is loaded
+    C_Timer.After(8, function()
+        if OneGuild:IsAuthorized() then
+            OneGuild:RequestGuildRoster()
+        end
+    end)
+    C_Timer.After(12, function()
         if OneGuild:IsAuthorized() and OneGuild.PushAllDKPToOfficerNotes then
             OneGuild:PushAllDKPToOfficerNotes()
         end

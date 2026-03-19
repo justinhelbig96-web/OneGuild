@@ -534,6 +534,46 @@ SlashCmdList["ONEGUILD"] = function(msg)
         else
             OneGuild:Print(OneGuild.COLORS.MUTED .. "Kein MOTD gesetzt.|r")
         end
+    elseif msg == "dkptest" then
+        -- Diagnostic: test officer note writing
+        OneGuild:Print("|cFFFFD700=== DKP Officer Note Test ===")
+        OneGuild:Print("InGuild: " .. tostring(IsInGuild()))
+        local canEdit = CanEditOfficerNote and CanEditOfficerNote()
+        OneGuild:Print("CanEditOfficerNote(): " .. tostring(canEdit))
+        if C_GuildInfo and C_GuildInfo.CanEditOfficerNote then
+            OneGuild:Print("C_GuildInfo.CanEditOfficerNote(): " .. tostring(C_GuildInfo.CanEditOfficerNote()))
+        else
+            OneGuild:Print("C_GuildInfo.CanEditOfficerNote: nicht vorhanden")
+        end
+        OneGuild:Print("CanWriteOfficerNotes(): " .. tostring(OneGuild:CanWriteOfficerNotes()))
+        local numGuild = GetNumGuildMembers() or 0
+        OneGuild:Print("Gildenmitglieder geladen: " .. numGuild)
+        local myName = UnitName("player") or "?"
+        local myDKP = OneGuild:GetDKPForPlayer(myName)
+        OneGuild:Print("Mein DKP (" .. myName .. "): " .. tostring(myDKP))
+        -- Show first 3 members with their officer notes
+        for i = 1, math.min(3, numGuild) do
+            local gName, _, rankIdx, _, _, _, _, officerNote = GetGuildRosterInfo(i)
+            if gName then
+                local gs = strsplit("-", gName)
+                OneGuild:Print("  " .. gs .. " (Rang " .. tostring(rankIdx) .. ") Note: '" .. tostring(officerNote) .. "'")
+            end
+        end
+        -- Try writing own officer note as test
+        OneGuild:Print("Versuche Testschreibung...")
+        local result = OneGuild:SaveDKPToOfficerNote(myName, myDKP ~= 0 and myDKP or 100)
+        if result then
+            OneGuild:Print("|cFF66FF66Erfolgreich geschrieben!|r Pruefe die Offiziersnotiz.")
+        else
+            OneGuild:Print("|cFFFF4444Schreiben fehlgeschlagen!|r Siehe Fehlermeldung oben.")
+        end
+    elseif msg == "dkppush" then
+        -- Force push all DKP to officer notes
+        OneGuild:Print("|cFFFFD700Erzwinge DKP-Push in Offiziersnotizen...|r")
+        OneGuild:RequestGuildRoster()
+        C_Timer.After(2, function()
+            OneGuild:PushAllDKPToOfficerNotes()
+        end)
     elseif msg == "help" then
         OneGuild:Print("Befehle:")
         OneGuild:Print("  /og         - Hauptfenster öffnen/schließen")
@@ -549,6 +589,8 @@ SlashCmdList["ONEGUILD"] = function(msg)
         OneGuild:Print("  /og groups   - Raid-Gruppen öffnen")
         OneGuild:Print("  /og lootcheck - Addon-Check starten")
         OneGuild:Print("  /og settings - Einstellungen öffnen")
+        OneGuild:Print("  /og dkptest  - DKP Offiziersnotiz Test")
+        OneGuild:Print("  /og dkppush  - DKP in Offiziersnotizen schreiben")
         OneGuild:Print("  /og debug delete - Alle Daten zurücksetzen (Test)")
         OneGuild:Print("  /og help     - Diese Hilfe")
     else
@@ -775,12 +817,42 @@ end)
 -- Officer Note DKP Storage
 -- Format in officer note: "DKP:123"
 ------------------------------------------------------------------------
+function OneGuild:CanWriteOfficerNotes()
+    -- Try multiple APIs (Retail compatibility)
+    if CanEditOfficerNote then
+        local ok = CanEditOfficerNote()
+        if ok then return true end
+    end
+    if C_GuildInfo and C_GuildInfo.CanEditOfficerNote then
+        local ok = C_GuildInfo.CanEditOfficerNote()
+        if ok then return true end
+    end
+    -- Fallback: check guild rank flags
+    if GuildControlGetRankFlags then
+        local flags = {GuildControlGetRankFlags()}
+        -- Flag 12 = Edit Officer Note (0-indexed)
+        if flags[13] then return true end
+    end
+    return false
+end
+
 function OneGuild:SaveDKPToOfficerNote(memberKey, dkpVal)
-    if not IsInGuild() then return end
-    if not CanEditOfficerNote or not CanEditOfficerNote() then return end
+    if not IsInGuild() then
+        self:Print("|cFFFF4444[DKP] Nicht in Gilde!|r")
+        return false
+    end
+    if not self:CanWriteOfficerNotes() then
+        self:Print("|cFFFF4444[DKP] Keine Berechtigung fuer Offiziersnotizen! Rang hat kein 'Offiziersnotiz bearbeiten' Recht.|r")
+        return false
+    end
 
     local shortName = strsplit("-", memberKey)
     local numGuild = GetNumGuildMembers() or 0
+    if numGuild == 0 then
+        self:Print("|cFFFF4444[DKP] Gildenliste nicht geladen (0 Mitglieder). Versuche /reload.|r")
+        return false
+    end
+
     for i = 1, numGuild do
         local gName, _, _, _, _, _, _, officerNote = GetGuildRosterInfo(i)
         if gName then
@@ -791,10 +863,12 @@ function OneGuild:SaveDKPToOfficerNote(memberKey, dkpVal)
                 self:Debug("DKP in Offiziersnotiz gespeichert: " .. gs .. " = " .. tostring(dkpVal))
                 -- Force roster refresh so other online members get the update
                 self:RequestGuildRoster()
-                return
+                return true
             end
         end
     end
+    self:Debug("[DKP] Spieler nicht in Gildenliste gefunden: " .. memberKey)
+    return false
 end
 
 function OneGuild:LoadDKPFromOfficerNotes()
@@ -826,10 +900,15 @@ end
 ------------------------------------------------------------------------
 function OneGuild:PushAllDKPToOfficerNotes()
     if not IsInGuild() then return end
-    if not CanEditOfficerNote or not CanEditOfficerNote() then return end
+    if not self:CanWriteOfficerNotes() then
+        self:Debug("PushAllDKP: Keine Berechtigung fuer Offiziersnotizen")
+        return
+    end
     if not self.db or not self.db.dkp then return end
 
     local numGuild = GetNumGuildMembers() or 0
+    if numGuild == 0 then return end
+
     local pushed = 0
 
     for i = 1, numGuild do
@@ -855,7 +934,7 @@ function OneGuild:PushAllDKPToOfficerNotes()
     end
 
     if pushed > 0 then
-        self:Debug("DKP in Offiziersnotizen geschrieben: " .. pushed .. " Spieler aktualisiert")
+        self:PrintSuccess("DKP in Offiziersnotizen aktualisiert: " .. pushed .. " Spieler")
         self:RequestGuildRoster()
     end
 end
