@@ -221,7 +221,7 @@ function OneGuild:StartAddonCheck()
     -- Allow RL, Assist, or Whitelist users
     local myName = UnitName("player") or ""
     local allowed = IsRaidLeader() or IsRaidAssist()
-    if not allowed and self.ADMIN_WHITELIST and self.ADMIN_WHITELIST[myName] then
+    if not allowed and self:IsOnWhitelist(myName) then
         allowed = true
     end
     if not allowed then

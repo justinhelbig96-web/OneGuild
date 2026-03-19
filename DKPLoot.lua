@@ -348,7 +348,7 @@ function OneGuild:RefreshDKPLoot()
         -- Show end/cancel buttons only for auctioneer
         local myName = ShortName(UnitName("player"))
         local auctioneerShort = ShortName(auction.auctioneer or "")
-        if myName == auctioneerShort or (OneGuild.ADMIN_WHITELIST and OneGuild.ADMIN_WHITELIST[myName]) then
+        if myName == auctioneerShort or OneGuild:IsOnWhitelist(myName) then
             panel.endBtn:Show()
             panel.cancelBtn:Show()
         else

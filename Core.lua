@@ -18,15 +18,43 @@ OneGuild.REQUIRED_GUILD = "One"
 ------------------------------------------------------------------------
 -- Version & Constants
 ------------------------------------------------------------------------
-OneGuild.VERSION = "1.0.8c"
+OneGuild.VERSION = "1.0.8d"
 
 ------------------------------------------------------------------------
--- Admin Whitelist  –  Characters listed here get auto-admin rights.
--- Also: the guild leader (rank index 0) is always auto-admin.
+-- Admin Whitelist  –  now loaded from SavedVariables (db.settings.whitelist)
+-- Guild leader (rank index 0) is always auto-admin.
+-- Only rank 0 can edit the whitelist.
 ------------------------------------------------------------------------
-OneGuild.ADMIN_WHITELIST = {
-    ["Rigipsplatte"] = true,
-}
+OneGuild.ADMIN_WHITELIST = {}  -- populated from db on login
+
+function OneGuild:IsOnWhitelist(name)
+    if not name then return false end
+    local short = strsplit("-", name)
+    -- Check dynamic whitelist from db
+    if self.db and self.db.settings and self.db.settings.whitelist then
+        for _, wName in ipairs(self.db.settings.whitelist) do
+            if wName == short or wName == name then return true end
+        end
+    end
+    -- Also check runtime ADMIN_WHITELIST (legacy/compat)
+    if self.ADMIN_WHITELIST[short] or self.ADMIN_WHITELIST[name] then return true end
+    return false
+end
+
+function OneGuild:IsGuildLeader()
+    local _, _, rankIndex = GetGuildInfo("player")
+    return rankIndex and rankIndex == 0
+end
+
+function OneGuild:LoadWhitelistFromDB()
+    if not self.db or not self.db.settings then return end
+    if not self.db.settings.whitelist then self.db.settings.whitelist = {} end
+    -- Rebuild ADMIN_WHITELIST table from db
+    self.ADMIN_WHITELIST = {}
+    for _, name in ipairs(self.db.settings.whitelist) do
+        self.ADMIN_WHITELIST[name] = true
+    end
+end
 
 OneGuild.COLORS = {
     TITLE   = "|cFFFFB800",    -- Gold
@@ -64,6 +92,7 @@ local DEFAULTS = {
         mapPinAlpha    = 0.9,
         lootAutoPass   = true,    -- auto-pass in guild raids
         dkpPermission  = "officer",  -- who can edit DKP: "leader", "officer", "raidlead", "all"
+        whitelist      = {},    -- dynamic admin whitelist (character names)
     },
     dismissed    = false,
     welcomeDismissedVersion = "",
@@ -231,18 +260,20 @@ function OneGuild:CheckAutoAdmin()
     if self.isAdmin then return end   -- already admin
     if not IsInGuild() then return end
 
+    -- Load whitelist from db first
+    self:LoadWhitelistFromDB()
+
     local playerName = UnitName("player") or ""
 
-    -- 1) Check whitelist
-    if self.ADMIN_WHITELIST and self.ADMIN_WHITELIST[playerName] then
+    -- 1) Check whitelist (dynamic from db)
+    if self:IsOnWhitelist(playerName) then
         self.isAdmin = true
         self:PrintSuccess("Auto-Admin: Du bist auf der Whitelist.")
         return
     end
 
     -- 2) Check guild leader (rankIndex 0 = Gildenmeister)
-    local _, _, rankIndex = GetGuildInfo("player")
-    if rankIndex and rankIndex == 0 then
+    if self:IsGuildLeader() then
         self.isAdmin = true
         self:PrintSuccess("Auto-Admin: Du bist Gildenmeister.")
         return
@@ -256,8 +287,8 @@ end
 function OneGuild:CanEditDKP()
     local myName = UnitName("player") or ""
 
-    -- Whitelist always allowed
-    if self.ADMIN_WHITELIST and self.ADMIN_WHITELIST[myName] then return true end
+    -- Whitelist always allowed (dynamic)
+    if self:IsOnWhitelist(myName) then return true end
 
     -- Guild leader (rank 0) always allowed
     local _, _, rankIndex = GetGuildInfo("player")
@@ -267,14 +298,11 @@ function OneGuild:CanEditDKP()
     local perm = (self.db and self.db.settings and self.db.settings.dkpPermission) or "officer"
 
     if perm == "leader" then
-        -- Only rank 0 + whitelist (already checked above)
         return false
     elseif perm == "officer" then
-        -- Officers = rank 0 or 1
         if rankIndex and rankIndex <= 1 then return true end
         return false
     elseif perm == "raidlead" then
-        -- Officers + RL/Assist in raid
         if rankIndex and rankIndex <= 1 then return true end
         if IsInRaid() then
             if UnitIsGroupLeader("player") or UnitIsGroupAssistant("player") then
@@ -295,10 +323,16 @@ end
 ------------------------------------------------------------------------
 function OneGuild:CanEditPermissions()
     local myName = UnitName("player") or ""
-    if self.ADMIN_WHITELIST and self.ADMIN_WHITELIST[myName] then return true end
+    if self:IsOnWhitelist(myName) then return true end
     local _, _, rankIndex = GetGuildInfo("player")
-    if rankIndex and rankIndex ~= nil and rankIndex <= 1 then return true end
+    if rankIndex and rankIndex <= 1 then return true end
     return false
+end
+
+-- Only guild leader (rank 0) can edit the whitelist
+function OneGuild:CanEditWhitelist()
+    local _, _, rankIndex = GetGuildInfo("player")
+    return rankIndex and rankIndex == 0
 end
 
 ------------------------------------------------------------------------

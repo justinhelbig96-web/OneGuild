@@ -348,21 +348,24 @@ local function BuildPermissionsTab(content)
         radioBtn:SetSize(22, 22)
         radioBtn:SetChecked(currentPerm == opt.value)
 
-        if not canEdit then
-            radioBtn:Disable()
-            radioBtn:SetAlpha(0.4)
-        end
-
         local radioLabel = radioBtn:CreateFontString(nil, "OVERLAY")
         radioLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
         radioLabel:SetPoint("LEFT", radioBtn, "RIGHT", 4, 0)
-        radioLabel:SetTextColor(1, 0.84, 0)
-        radioLabel:SetText(opt.label)
 
         local descLabel = content:CreateFontString(nil, "OVERLAY")
         descLabel:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
         descLabel:SetPoint("TOPLEFT", radioBtn, "BOTTOMLEFT", 26, -1)
-        descLabel:SetTextColor(0.6, 0.5, 0.35)
+
+        if not canEdit then
+            radioBtn:Disable()
+            radioBtn:SetAlpha(0.4)
+            radioLabel:SetTextColor(0.4, 0.35, 0.2)
+            descLabel:SetTextColor(0.3, 0.25, 0.15)
+        else
+            radioLabel:SetTextColor(1, 0.84, 0)
+            descLabel:SetTextColor(0.6, 0.5, 0.35)
+        end
+        radioLabel:SetText(opt.label)
         descLabel:SetText(opt.desc)
 
         radioBtn:SetScript("OnClick", function()
@@ -371,7 +374,6 @@ local function BuildPermissionsTab(content)
                 OneGuild:Print("|cFFFF4444Du hast keine Berechtigung, dies zu \195\164ndern.|r")
                 return
             end
-            -- Uncheck all others, check this one
             for _, rb in ipairs(permRadioButtons) do
                 rb.btn:SetChecked(false)
             end
@@ -384,21 +386,178 @@ local function BuildPermissionsTab(content)
         table.insert(permRadioButtons, { btn = radioBtn, value = opt.value })
     end
 
-    -- Whitelist info
-    local whitelistInfo = content:CreateFontString(nil, "OVERLAY")
-    whitelistInfo:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
-    whitelistInfo:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -264)
-    whitelistInfo:SetWidth(280)
-    whitelistInfo:SetJustifyH("LEFT")
-    whitelistInfo:SetTextColor(0.55, 0.41, 0.08)
+    -- ================================================================
+    -- WHITELIST SECTION (only editable by guild leader, rank 0)
+    -- ================================================================
+    HLine(content, -268)
+    Label(content, 0, -278, "Admin-Whitelist", 13, 1, 0.72, 0)
 
-    local whitelistNames = {}
-    if OneGuild.ADMIN_WHITELIST then
-        for name, _ in pairs(OneGuild.ADMIN_WHITELIST) do
-            table.insert(whitelistNames, name)
+    local canEditWL = OneGuild.CanEditWhitelist and OneGuild:CanEditWhitelist() or false
+
+    local wlInfoText = content:CreateFontString(nil, "OVERLAY")
+    wlInfoText:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
+    wlInfoText:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -296)
+    wlInfoText:SetWidth(280)
+    wlInfoText:SetJustifyH("LEFT")
+    if canEditWL then
+        wlInfoText:SetTextColor(0.6, 0.5, 0.35)
+        wlInfoText:SetText("Spieler auf der Whitelist haben immer Admin-Rechte.\nNur der Gildenmeister (Rang 0) kann diese Liste bearbeiten.")
+    else
+        wlInfoText:SetTextColor(0.4, 0.35, 0.2)
+        wlInfoText:SetText("Spieler auf der Whitelist haben immer Admin-Rechte.\n|cFFFF4444Nur der Gildenmeister kann diese Liste bearbeiten.|r")
+    end
+
+    -- Current whitelist display
+    local wlListText = content:CreateFontString(nil, "OVERLAY")
+    wlListText:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
+    wlListText:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -328)
+    wlListText:SetWidth(280)
+    wlListText:SetJustifyH("LEFT")
+    wlListText:SetTextColor(0.87, 0.73, 0.4)
+
+    local function RefreshWhitelistDisplay()
+        local wl = (OneGuild.db and OneGuild.db.settings and OneGuild.db.settings.whitelist) or {}
+        if #wl == 0 then
+            wlListText:SetText("|cFF555555(Keine Spieler auf der Whitelist)|r")
+        else
+            wlListText:SetText("|cFFDDB866" .. table.concat(wl, ", ") .. "|r")
         end
     end
-    whitelistInfo:SetText("|cFFDDB866Whitelist (immer berechtigt):|r\n" .. (table.concat(whitelistNames, ", ")))
+    RefreshWhitelistDisplay()
+
+    -- Add player input
+    local addBox = CreateFrame("EditBox", nil, content, "BackdropTemplate")
+    addBox:SetSize(160, 24)
+    addBox:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -352)
+    addBox:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    addBox:SetBackdropColor(0.12, 0.06, 0.04, 1)
+    addBox:SetBackdropBorderColor(0.5, 0.35, 0.1, 0.6)
+    addBox:SetFontObject("GameFontHighlightSmall")
+    addBox:SetAutoFocus(false)
+    addBox:SetMaxLetters(30)
+    addBox:SetTextInsets(6, 6, 0, 0)
+    addBox:EnableMouse(true)
+    addBox:EnableKeyboard(true)
+    addBox:SetScript("OnMouseDown", function(self) self:SetFocus() end)
+    addBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+    if not canEditWL then
+        addBox:Disable()
+        addBox:SetAlpha(0.4)
+    end
+
+    -- Add button
+    local addBtn = CreateFrame("Button", nil, content, "BackdropTemplate")
+    addBtn:SetSize(70, 24)
+    addBtn:SetPoint("LEFT", addBox, "RIGHT", 6, 0)
+    addBtn:RegisterForClicks("AnyUp")
+    addBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    local addBtnText = addBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    addBtnText:SetPoint("CENTER")
+
+    if canEditWL then
+        addBtn:SetBackdropColor(0.1, 0.45, 0.1, 0.9)
+        addBtn:SetBackdropBorderColor(0.2, 0.7, 0.2, 0.7)
+        addBtnText:SetText("|cFF66FF66+ Hinzu|r")
+    else
+        addBtn:SetBackdropColor(0.15, 0.15, 0.15, 0.5)
+        addBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.4)
+        addBtnText:SetText("|cFF666666+ Hinzu|r")
+        addBtn:Disable()
+    end
+
+    addBtn:SetScript("OnClick", function()
+        if not OneGuild:CanEditWhitelist() then
+            OneGuild:Print("|cFFFF4444Nur der Gildenmeister kann die Whitelist bearbeiten.|r")
+            return
+        end
+        local name = strtrim(addBox:GetText() or "")
+        if name == "" then return end
+        -- Capitalize first letter
+        name = name:sub(1,1):upper() .. name:sub(2):lower()
+        if not OneGuild.db.settings.whitelist then OneGuild.db.settings.whitelist = {} end
+        -- Check duplicate
+        for _, wn in ipairs(OneGuild.db.settings.whitelist) do
+            if wn == name then
+                OneGuild:Print("|cFFFFCC00" .. name .. " ist bereits auf der Whitelist.|r")
+                addBox:SetText("")
+                return
+            end
+        end
+        table.insert(OneGuild.db.settings.whitelist, name)
+        OneGuild:LoadWhitelistFromDB()
+        addBox:SetText("")
+        addBox:ClearFocus()
+        RefreshWhitelistDisplay()
+        OneGuild:PrintSuccess(name .. " zur Whitelist hinzugef\195\188gt.")
+    end)
+
+    addBox:SetScript("OnEnterPressed", function()
+        addBtn:GetScript("OnClick")(addBtn)
+    end)
+
+    -- Remove button
+    local removeBtn = CreateFrame("Button", nil, content, "BackdropTemplate")
+    removeBtn:SetSize(80, 24)
+    removeBtn:SetPoint("LEFT", addBtn, "RIGHT", 6, 0)
+    removeBtn:RegisterForClicks("AnyUp")
+    removeBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    local removeBtnText = removeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    removeBtnText:SetPoint("CENTER")
+
+    if canEditWL then
+        removeBtn:SetBackdropColor(0.5, 0.1, 0.1, 0.9)
+        removeBtn:SetBackdropBorderColor(0.7, 0.2, 0.2, 0.7)
+        removeBtnText:SetText("|cFFFF6666- Entfernen|r")
+    else
+        removeBtn:SetBackdropColor(0.15, 0.15, 0.15, 0.5)
+        removeBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.4)
+        removeBtnText:SetText("|cFF666666- Entfernen|r")
+        removeBtn:Disable()
+    end
+
+    removeBtn:SetScript("OnClick", function()
+        if not OneGuild:CanEditWhitelist() then
+            OneGuild:Print("|cFFFF4444Nur der Gildenmeister kann die Whitelist bearbeiten.|r")
+            return
+        end
+        local name = strtrim(addBox:GetText() or "")
+        if name == "" then return end
+        name = name:sub(1,1):upper() .. name:sub(2):lower()
+        if not OneGuild.db.settings.whitelist then return end
+        local found = false
+        for idx, wn in ipairs(OneGuild.db.settings.whitelist) do
+            if wn == name then
+                table.remove(OneGuild.db.settings.whitelist, idx)
+                found = true
+                break
+            end
+        end
+        if found then
+            OneGuild:LoadWhitelistFromDB()
+            addBox:SetText("")
+            addBox:ClearFocus()
+            RefreshWhitelistDisplay()
+            OneGuild:PrintSuccess(name .. " von der Whitelist entfernt.")
+        else
+            OneGuild:Print("|cFFFF4444" .. name .. " ist nicht auf der Whitelist.|r")
+        end
+    end)
 end
 
 ------------------------------------------------------------------------

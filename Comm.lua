@@ -1044,11 +1044,9 @@ function OneGuild:ProcessDKP(sender, data)
     local myName = UnitName("player") or ""
     if sender == myName or senderShort == myName then isAdmin = true end
 
-    -- 2) Check ADMIN_WHITELIST
-    if not isAdmin and self.ADMIN_WHITELIST then
-        if self.ADMIN_WHITELIST[sender] or self.ADMIN_WHITELIST[senderShort] then
-            isAdmin = true
-        end
+    -- 2) Check dynamic whitelist
+    if not isAdmin and self:IsOnWhitelist(senderShort) then
+        isAdmin = true
     end
 
     -- 3) Check guild roster: guild leader (rank 0) or officers (rank 1)

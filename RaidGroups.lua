@@ -84,7 +84,7 @@ local RemoveFromGroup
 local function CanEditGroups()
     local myName = UnitName("player") or ""
     -- Whitelist always allowed
-    if OneGuild.ADMIN_WHITELIST and OneGuild.ADMIN_WHITELIST[myName] then
+    if OneGuild:IsOnWhitelist(myName) then
         return true
     end
     -- In raid: RL or Assist
