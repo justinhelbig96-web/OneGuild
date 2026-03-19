@@ -192,25 +192,55 @@ local function UpdateDragPosition()
 end
 
 ------------------------------------------------------------------------
--- Move player to group via WoW API
+-- Move player to group (addon-managed)
 ------------------------------------------------------------------------
 local function MoveToGroup(playerName, targetGroup)
-    if not IsInRaid() then return end
-    if not UnitIsGroupLeader("player") and not UnitIsGroupAssistant("player") then
-        OneGuild:PrintError("Nur Raid Leader / Assistent kann Gruppen ändern!")
-        return
-    end
-    local numRaid = GetNumGroupMembers() or 0
-    for i = 1, numRaid do
-        local name = GetRaidRosterInfo(i)
-        if name == playerName then
-            SetRaidSubgroup(i, targetGroup)
-            C_Timer.After(0.3, function()
-                OneGuild:RefreshRaidGroups()
-            end)
-            return
+    local raidIdx = OneGuild.currentRaidIdx
+    if not raidIdx or not OneGuild.db or not OneGuild.db.raids then return end
+    local rd = OneGuild.db.raids[raidIdx]
+    if not rd then return end
+    if not rd.raidGroups then rd.raidGroups = {} end
+
+    -- Remove from any existing group first
+    for g = 1, MAX_GROUPS do
+        if rd.raidGroups[g] then
+            for i = #rd.raidGroups[g], 1, -1 do
+                if rd.raidGroups[g][i] == playerName then
+                    table.remove(rd.raidGroups[g], i)
+                end
+            end
         end
     end
+
+    -- Add to target group (max 5)
+    if not rd.raidGroups[targetGroup] then rd.raidGroups[targetGroup] = {} end
+    if #rd.raidGroups[targetGroup] < MAX_PER_GROUP then
+        table.insert(rd.raidGroups[targetGroup], playerName)
+    end
+
+    OneGuild:RefreshRaidGroups()
+end
+
+------------------------------------------------------------------------
+-- Remove player from all groups (back to roster)
+------------------------------------------------------------------------
+local function RemoveFromGroup(playerName)
+    local raidIdx = OneGuild.currentRaidIdx
+    if not raidIdx or not OneGuild.db or not OneGuild.db.raids then return end
+    local rd = OneGuild.db.raids[raidIdx]
+    if not rd or not rd.raidGroups then return end
+
+    for g = 1, MAX_GROUPS do
+        if rd.raidGroups[g] then
+            for i = #rd.raidGroups[g], 1, -1 do
+                if rd.raidGroups[g][i] == playerName then
+                    table.remove(rd.raidGroups[g], i)
+                end
+            end
+        end
+    end
+
+    OneGuild:RefreshRaidGroups()
 end
 
 ------------------------------------------------------------------------
@@ -259,6 +289,107 @@ function OneGuild:BuildRaidGroupsFrame()
     -- Loot status
     f.lootStatus = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.lootStatus:SetPoint("LEFT", title, "RIGHT", 16, 0)
+
+    -- Lootmeister label + dropdown button
+    local lmLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lmLabel:SetPoint("LEFT", f.lootStatus, "RIGHT", 16, 0)
+    lmLabel:SetText("|cFFFF8800LM:|r")
+
+    local lmBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
+    lmBtn:SetSize(140, 20)
+    lmBtn:SetPoint("LEFT", lmLabel, "RIGHT", 4, 0)
+    lmBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    lmBtn:SetBackdropColor(0.12, 0.08, 0.04, 0.9)
+    lmBtn:SetBackdropBorderColor(0.5, 0.35, 0.1, 0.6)
+    f.lmBtnText = lmBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.lmBtnText:SetPoint("LEFT", lmBtn, "LEFT", 6, 0)
+    f.lmBtnText:SetText("|cFF888888-- keiner --|r")
+    local lmArrow = lmBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lmArrow:SetPoint("RIGHT", lmBtn, "RIGHT", -4, 0)
+    lmArrow:SetText("|cFFDDB866v|r")
+    f.lmBtn = lmBtn
+
+    -- Lootmeister dropdown menu
+    local lmMenu = CreateFrame("Frame", "OneGuildLMDropdown", UIParent, "BackdropTemplate")
+    lmMenu:SetFrameStrata("FULLSCREEN_DIALOG")
+    lmMenu:SetFrameLevel(500)
+    lmMenu:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 10,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    lmMenu:SetBackdropColor(0.04, 0.02, 0.02, 0.98)
+    lmMenu:SetBackdropBorderColor(0.5, 0.35, 0.1, 0.7)
+    lmMenu:SetClampedToScreen(true)
+    lmMenu:Hide()
+    f.lmMenu = lmMenu
+    f.lmMenuItems = {}
+
+    lmBtn:SetScript("OnClick", function(self)
+        if lmMenu:IsShown() then
+            lmMenu:Hide()
+            return
+        end
+        -- Rebuild menu from signups
+        for _, old in ipairs(f.lmMenuItems) do old:Hide() end
+        wipe(f.lmMenuItems)
+
+        local raidIdx = OneGuild.currentRaidIdx
+        local entries = {}
+        -- "None" option
+        table.insert(entries, { name = "", display = "|cFF888888-- keiner --|r" })
+        if raidIdx and OneGuild.db and OneGuild.db.raids and OneGuild.db.raids[raidIdx] then
+            local rd = OneGuild.db.raids[raidIdx]
+            local signups = rd.signups or {}
+            for name, s in pairs(signups) do
+                if type(s) == "table" and s.status == "accepted" then
+                    local short = strsplit("-", name)
+                    table.insert(entries, { name = short, display = "|cFFFFD700" .. short .. "|r" })
+                end
+            end
+        end
+
+        local itemH = 20
+        lmMenu:SetSize(160, #entries * itemH + 8)
+        lmMenu:ClearAllPoints()
+        lmMenu:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, -2)
+
+        for idx, e in ipairs(entries) do
+            local item = CreateFrame("Button", nil, lmMenu, "BackdropTemplate")
+            item:SetSize(150, itemH - 2)
+            item:SetPoint("TOPLEFT", lmMenu, "TOPLEFT", 4, -((idx - 1) * itemH) - 4)
+            item:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+            item:SetBackdropColor(0, 0, 0, 0)
+
+            local label = item:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            label:SetPoint("LEFT", 6, 0)
+            label:SetText(e.display)
+
+            item:SetScript("OnEnter", function(s) s:SetBackdropColor(0.3, 0.18, 0.05, 0.8) end)
+            item:SetScript("OnLeave", function(s) s:SetBackdropColor(0, 0, 0, 0) end)
+            item:SetScript("OnClick", function()
+                if raidIdx and OneGuild.db and OneGuild.db.raids and OneGuild.db.raids[raidIdx] then
+                    OneGuild.db.raids[raidIdx].lootmeister = (e.name ~= "") and e.name or nil
+                end
+                lmMenu:Hide()
+                OneGuild:RefreshRaidGroups()
+            end)
+            table.insert(f.lmMenuItems, item)
+        end
+        lmMenu:Show()
+    end)
+    lmBtn:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(0.2, 0.12, 0.06, 1)
+    end)
+    lmBtn:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0.12, 0.08, 0.04, 0.9)
+    end)
 
     -- =================================================================
     -- LEFT SIDE: 8 Group panels (4 x 2 grid)
@@ -385,6 +516,23 @@ function OneGuild:BuildRaidGroupsFrame()
     rosterPanel:SetBackdropBorderColor(0.4, 0.3, 0.1, 0.5)
     f.rosterPanel = rosterPanel
 
+    -- Drop on roster panel = remove from group
+    rosterPanel:EnableMouse(true)
+    rosterPanel:SetScript("OnMouseUp", function(self, btn)
+        if btn == "LeftButton" and dragPlayerName then
+            RemoveFromGroup(dragPlayerName)
+            StopDrag()
+        end
+    end)
+    rosterPanel:SetScript("OnEnter", function(self)
+        if dragPlayerName then
+            self:SetBackdropBorderColor(0.3, 0.8, 0.3, 1)
+        end
+    end)
+    rosterPanel:SetScript("OnLeave", function(self)
+        self:SetBackdropBorderColor(0.4, 0.3, 0.1, 0.5)
+    end)
+
     f.rosterTitle = rosterPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     f.rosterTitle:SetPoint("TOP", rosterPanel, "TOP", 0, -4)
     f.rosterTitle:SetText("|cFFFFB800Spieler|r")
@@ -473,58 +621,9 @@ function OneGuild:RefreshRaidGroups()
     if not groupsFrame or not groupsFrame:IsShown() then return end
     local f = groupsFrame
 
-    local groups, allMembers = GetRaidGroups()
+    local _, allMembers = GetRaidGroups()
 
-    -- ===== Update group panels =====
-    for g = 1, MAX_GROUPS do
-        local panel   = groupPanels[g]
-        local members = groups[g] or {}
-        panel.header:SetText("|cFFFFB800Gruppe " .. g .. "|r |cFF8B7355(" .. #members .. ")|r")
-
-        for s = 1, MAX_PER_GROUP do
-            local cell   = panel.cells[s]
-            local member = members[s]
-
-            if member then
-                cell.playerName  = member.name
-                cell.playerClass = member.classFile
-                local short = strsplit("-", member.name)
-                local display = ""
-
-                -- Rank icon
-                if member.rank == 2 then
-                    display = "|cFFFFD700\226\152\133|r "
-                elseif member.rank == 1 then
-                    display = "|cFF88CCFF\226\151\134|r "
-                end
-
-                -- Class-colored name
-                display = display .. ClassHex(member.classFile) .. short .. "|r"
-
-                -- Addon check status
-                local status = GetAddonStatus(member.name)
-                display = display .. AddonStatusIcon(status)
-
-                cell.text:SetText(display)
-                cell.bg:SetColorTexture(0.1, 0.06, 0.03, 0.4)
-                cell:SetAlpha(member.online and 1 or 0.4)
-            else
-                cell.playerName  = nil
-                cell.playerClass = nil
-                cell.text:SetText("")
-                cell.bg:SetColorTexture(0.05, 0.03, 0.02, 0.2)
-                cell:SetAlpha(1)
-            end
-        end
-    end
-
-    -- ===== Update roster panel =====
-    -- Build roster from raid signups + actual raid members
-    local rosterEntries = {}
-    local signupNames = {}
-    local raidIdx = self.currentRaidIdx
-
-    -- Build guild class lookup
+    -- Build class lookup from guild + raid
     local classLookup = {}
     local numGuild = GetNumGuildMembers() or 0
     for gi = 1, numGuild do
@@ -541,30 +640,86 @@ function OneGuild:RefreshRaidGroups()
         classLookup[m.name] = m.classFile
     end
 
-    -- Get signups from selected raid
-    if raidIdx and self.db and self.db.raids and self.db.raids[raidIdx] then
-        local rd = self.db.raids[raidIdx]
-        local signups = rd.signups or {}
+    -- Get addon-managed raidGroups from current raid
+    local raidIdx = self.currentRaidIdx
+    local rd = (raidIdx and self.db and self.db.raids and self.db.raids[raidIdx]) or nil
+    local raidGroups = (rd and rd.raidGroups) or {}
+    local signups = (rd and rd.signups) or {}
+
+    -- Build set of all grouped player names (short names)
+    local groupedNames = {}
+
+    -- ===== Update group panels from addon data =====
+    for g = 1, MAX_GROUPS do
+        local panel = groupPanels[g]
+        local members = raidGroups[g] or {}
+        panel.header:SetText("|cFFFFB800Gruppe " .. g .. "|r |cFF8B7355(" .. #members .. ")|r")
+
+        for s = 1, MAX_PER_GROUP do
+            local cell  = panel.cells[s]
+            local pName = members[s]
+
+            if pName then
+                cell.playerName  = pName
+                local short = strsplit("-", pName)
+                local cf = classLookup[pName] or classLookup[short]
+                cell.playerClass = cf
+                groupedNames[pName] = true
+                groupedNames[short] = true
+
+                -- Role icon prefix from signup
+                local roleStr = ""
+                local sig = signups[pName]
+                if type(sig) == "table" and sig.role and ROLE_COORDS[sig.role] then
+                    roleStr = "|cFFDDB866" .. (ROLE_LABELS_SHORT[sig.role] or "") .. "|r "
+                end
+
+                local display = roleStr .. ClassHex(cf) .. short .. "|r"
+                display = display .. AddonStatusIcon(GetAddonStatus(pName))
+
+                cell.text:SetText(display)
+                cell.bg:SetColorTexture(0.1, 0.06, 0.03, 0.4)
+                cell:SetAlpha(1)
+            else
+                cell.playerName  = nil
+                cell.playerClass = nil
+                cell.text:SetText("")
+                cell.bg:SetColorTexture(0.05, 0.03, 0.02, 0.2)
+                cell:SetAlpha(1)
+            end
+        end
+    end
+
+    -- ===== Update roster panel =====
+    -- Build roster from signups + raid members, excluding already grouped
+    local rosterEntries = {}
+    local signupNames = {}
+
+    -- Get signups from selected raid (exclude grouped)
+    if rd then
         for name, s in pairs(signups) do
             if type(s) == "table" and s.status == "accepted" then
                 local short = strsplit("-", name)
-                table.insert(rosterEntries, {
-                    name      = name,
-                    shortName = short,
-                    role      = s.role or "DD",
-                    classFile = classLookup[name] or classLookup[short],
-                    isSignup  = true,
-                })
+                if not groupedNames[name] and not groupedNames[short] then
+                    table.insert(rosterEntries, {
+                        name      = name,
+                        shortName = short,
+                        role      = s.role or "DD",
+                        classFile = classLookup[name] or classLookup[short],
+                        isSignup  = true,
+                    })
+                end
                 signupNames[name] = true
                 signupNames[short] = true
             end
         end
     end
 
-    -- Add actual raid members not already in signups
+    -- Add actual raid members not already in signups or grouped
     for _, m in ipairs(allMembers) do
         local short = strsplit("-", m.name)
-        if not signupNames[m.name] and not signupNames[short] then
+        if not signupNames[m.name] and not signupNames[short]
+           and not groupedNames[m.name] and not groupedNames[short] then
             table.insert(rosterEntries, {
                 name      = m.name,
                 shortName = short,
@@ -698,6 +853,16 @@ function OneGuild:RefreshRaidGroups()
             f.lootStatus:SetText("|cFF66FF66\226\151\143 Loot: AKTIV|r")
         else
             f.lootStatus:SetText("|cFFFF4444\226\151\143 Loot: INAKTIV|r")
+        end
+    end
+
+    -- Lootmeister button text
+    if f.lmBtnText then
+        local lm = rd and rd.lootmeister
+        if lm and lm ~= "" then
+            f.lmBtnText:SetText("|cFFFF8800" .. lm .. "|r")
+        else
+            f.lmBtnText:SetText("|cFF888888-- keiner --|r")
         end
     end
 end
