@@ -1011,6 +1011,10 @@ end
 ------------------------------------------------------------------------
 function OneGuild:SendDKPUpdate(memberKey, dkpVal)
     self:SendCommMessage(MSG_DKP, memberKey .. "|" .. tostring(dkpVal))
+    -- Also store in officer notes if possible
+    if self.SaveDKPToOfficerNote then
+        self:SaveDKPToOfficerNote(memberKey, dkpVal)
+    end
 end
 
 ------------------------------------------------------------------------

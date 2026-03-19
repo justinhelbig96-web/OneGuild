@@ -276,6 +276,35 @@ function OneGuild:BuildRaidTab()
         OneGuild:RefreshRaid()
     end)
 
+    -- DKP Distribution button (red)
+    local dkpBtn = CreateFrame("Button", nil, topBar, "BackdropTemplate")
+    dkpBtn:SetSize(70, 24)
+    dkpBtn:SetPoint("RIGHT", pastLabel, "LEFT", -14, 0)
+    dkpBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 10,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    dkpBtn:SetBackdropColor(0.4, 0.08, 0.08, 0.9)
+    dkpBtn:SetBackdropBorderColor(0.7, 0.2, 0.2, 0.6)
+    local dkpBtnText = dkpBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    dkpBtnText:SetPoint("CENTER")
+    dkpBtnText:SetText("|cFFFF4444DKP|r")
+    dkpBtn:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(0.55, 0.12, 0.12, 1)
+        self:SetBackdropBorderColor(0.9, 0.3, 0.3, 0.8)
+    end)
+    dkpBtn:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0.4, 0.08, 0.08, 0.9)
+        self:SetBackdropBorderColor(0.7, 0.2, 0.2, 0.6)
+    end)
+    dkpBtn:SetScript("OnClick", function()
+        if OneGuild.ShowDKPDistribution then
+            OneGuild:ShowDKPDistribution()
+        end
+    end)
+
     -- Raid list container
     local listFrame = CreateFrame("Frame", nil, parent)
     listFrame:SetPoint("TOPLEFT", topBar, "BOTTOMLEFT", 0, -4)
@@ -1511,4 +1540,552 @@ function OneGuild:CreateRaidFromDialog()
     if self.SendSingleRaid then
         self:SendSingleRaid(newRaid)
     end
+end
+
+------------------------------------------------------------------------
+-- DKP DISTRIBUTION WINDOW
+-- Shows all signed-up + grouped players with checkboxes.
+-- Dropdown for bonus type, buttons for +10/+20/custom DKP.
+------------------------------------------------------------------------
+local dkpDistFrame = nil
+
+-- Bonus types (German labels)
+local DKP_BONUS_TYPES = {
+    { label = "On Time Bonus",            value = "ontime" },
+    { label = "Boss Kill Bonus",          value = "bosskill" },
+    { label = "Raid Completion Bonus",    value = "completion" },
+    { label = "Progression Bonus",        value = "progression" },
+    { label = "Standby Bonus",            value = "standby" },
+    { label = "Unentschuldigtes Fehlen",  value = "absence" },
+    { label = "Korrektur",                value = "correction" },
+    { label = "Manuelle Anpassung",       value = "manual" },
+    { label = "Zero-Sum Award",           value = "zerosum" },
+}
+
+function OneGuild:ShowDKPDistribution()
+    if dkpDistFrame then
+        dkpDistFrame:Show()
+        self:RefreshDKPDistribution()
+        return
+    end
+
+    local FRAME_W = 520
+    local FRAME_H = 500
+    local ROW_H   = 22
+
+    local f = CreateFrame("Frame", "OneGuildDKPDistFrame", UIParent, "BackdropTemplate")
+    f:SetSize(FRAME_W, FRAME_H)
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:SetClampedToScreen(true)
+    f:SetFrameStrata("DIALOG")
+    f:SetFrameLevel(200)
+    f:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 14,
+        insets   = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    f:SetBackdropColor(0.06, 0.03, 0.03, 0.97)
+    f:SetBackdropBorderColor(0.7, 0.2, 0.2, 0.8)
+
+    -- Title bar (draggable)
+    local tb = CreateFrame("Frame", nil, f)
+    tb:SetHeight(32)
+    tb:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+    tb:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
+    tb:EnableMouse(true)
+    tb:RegisterForDrag("LeftButton")
+    tb:SetScript("OnDragStart", function() f:StartMoving() end)
+    tb:SetScript("OnDragStop", function() f:StopMovingOrSizing() end)
+
+    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -8)
+    title:SetText("|cFFFF4444DKP Verteilung|r")
+
+    local closeBtn = CreateFrame("Button", nil, tb, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
+    closeBtn:SetScript("OnClick", function() f:Hide() end)
+
+    -- ===== BONUS TYPE DROPDOWN =====
+    local bonusLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    bonusLabel:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -38)
+    bonusLabel:SetText("|cFFDDB866Bonus-Typ:|r")
+
+    local bonusBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
+    bonusBtn:SetSize(220, 24)
+    bonusBtn:SetPoint("LEFT", bonusLabel, "RIGHT", 8, 0)
+    bonusBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    bonusBtn:SetBackdropColor(0.12, 0.06, 0.04, 0.9)
+    bonusBtn:SetBackdropBorderColor(0.5, 0.35, 0.1, 0.6)
+
+    f.bonusBtnText = bonusBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.bonusBtnText:SetPoint("LEFT", bonusBtn, "LEFT", 8, 0)
+    f.bonusBtnText:SetText("|cFFFFD700Manuelle Anpassung|r")
+    f.selectedBonus = "manual"
+
+    local bonusArrow = bonusBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    bonusArrow:SetPoint("RIGHT", bonusBtn, "RIGHT", -6, 0)
+    bonusArrow:SetText("|cFFFFD700v|r")
+
+    -- Dropdown menu
+    local bonusMenu = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    bonusMenu:SetWidth(220)
+    bonusMenu:SetFrameStrata("TOOLTIP")
+    bonusMenu:SetFrameLevel(300)
+    bonusMenu:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 10,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    bonusMenu:SetBackdropColor(0.08, 0.04, 0.03, 0.98)
+    bonusMenu:SetBackdropBorderColor(0.6, 0.4, 0.1, 0.8)
+    bonusMenu:Hide()
+    f.bonusMenu = bonusMenu
+
+    local itemH = 22
+    bonusMenu:SetHeight(#DKP_BONUS_TYPES * itemH + 8)
+    for idx, bt in ipairs(DKP_BONUS_TYPES) do
+        local item = CreateFrame("Button", nil, bonusMenu, "BackdropTemplate")
+        item:SetSize(210, itemH - 2)
+        item:SetPoint("TOPLEFT", bonusMenu, "TOPLEFT", 4, -((idx - 1) * itemH) - 4)
+        item:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+        item:SetBackdropColor(0, 0, 0, 0)
+
+        local label = item:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        label:SetPoint("LEFT", 8, 0)
+        label:SetText("|cFFFFD700" .. bt.label .. "|r")
+
+        item:SetScript("OnEnter", function(s) s:SetBackdropColor(0.3, 0.18, 0.05, 0.8) end)
+        item:SetScript("OnLeave", function(s) s:SetBackdropColor(0, 0, 0, 0) end)
+        item:SetScript("OnClick", function()
+            f.selectedBonus = bt.value
+            f.bonusBtnText:SetText("|cFFFFD700" .. bt.label .. "|r")
+            bonusMenu:Hide()
+        end)
+    end
+
+    bonusBtn:SetScript("OnClick", function(self)
+        if bonusMenu:IsShown() then
+            bonusMenu:Hide()
+        else
+            bonusMenu:ClearAllPoints()
+            bonusMenu:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, -2)
+            bonusMenu:Show()
+        end
+    end)
+
+    -- ===== SELECT ALL / DESELECT ALL =====
+    local selectAllBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
+    selectAllBtn:SetSize(120, 22)
+    selectAllBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -66)
+    selectAllBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    selectAllBtn:SetBackdropColor(0.15, 0.1, 0.05, 0.8)
+    selectAllBtn:SetBackdropBorderColor(0.5, 0.35, 0.1, 0.5)
+    local selAllText = selectAllBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    selAllText:SetPoint("CENTER")
+    selAllText:SetText("|cFFFFD700Alle markieren|r")
+    selectAllBtn:SetScript("OnClick", function()
+        if f.playerRows then
+            for _, pr in ipairs(f.playerRows) do
+                if pr.cb then pr.cb:SetChecked(true) end
+            end
+        end
+    end)
+
+    local deselectAllBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
+    deselectAllBtn:SetSize(130, 22)
+    deselectAllBtn:SetPoint("LEFT", selectAllBtn, "RIGHT", 6, 0)
+    deselectAllBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    deselectAllBtn:SetBackdropColor(0.15, 0.1, 0.05, 0.8)
+    deselectAllBtn:SetBackdropBorderColor(0.5, 0.35, 0.1, 0.5)
+    local deselText = deselectAllBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    deselText:SetPoint("CENTER")
+    deselText:SetText("|cFF888888Alle abwählen|r")
+    deselectAllBtn:SetScript("OnClick", function()
+        if f.playerRows then
+            for _, pr in ipairs(f.playerRows) do
+                if pr.cb then pr.cb:SetChecked(false) end
+            end
+        end
+    end)
+
+    -- Selected count
+    f.selectedCount = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.selectedCount:SetPoint("LEFT", deselectAllBtn, "RIGHT", 12, 0)
+
+    -- ===== PLAYER LIST (scrollable) =====
+    local listArea = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    listArea:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -92)
+    listArea:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 60)
+    listArea:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    listArea:SetBackdropColor(0.04, 0.02, 0.02, 0.8)
+    listArea:SetBackdropBorderColor(0.3, 0.2, 0.1, 0.4)
+    f.listArea = listArea
+
+    -- Column headers
+    local colHeader = CreateFrame("Frame", nil, listArea)
+    colHeader:SetHeight(18)
+    colHeader:SetPoint("TOPLEFT", listArea, "TOPLEFT", 4, -2)
+    colHeader:SetPoint("TOPRIGHT", listArea, "TOPRIGHT", -4, -2)
+
+    local hSel = colHeader:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hSel:SetPoint("LEFT", colHeader, "LEFT", 4, 0)
+    hSel:SetText("|cFFDDB866\226\156\148|r")
+    local hName = colHeader:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hName:SetPoint("LEFT", colHeader, "LEFT", 30, 0)
+    hName:SetText("|cFFDDB866Spieler|r")
+    local hDKP = colHeader:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hDKP:SetPoint("LEFT", colHeader, "LEFT", 200, 0)
+    hDKP:SetText("|cFFDDB866Aktuell|r")
+    local hNew = colHeader:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hNew:SetPoint("LEFT", colHeader, "LEFT", 280, 0)
+    hNew:SetText("|cFFDDB866Neu|r")
+    local hGrp = colHeader:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hGrp:SetPoint("LEFT", colHeader, "LEFT", 360, 0)
+    hGrp:SetText("|cFFDDB866Gruppe|r")
+
+    -- Scroll content
+    local scrollContent = CreateFrame("Frame", nil, listArea)
+    scrollContent:SetPoint("TOPLEFT", listArea, "TOPLEFT", 4, -22)
+    scrollContent:SetPoint("BOTTOMRIGHT", listArea, "BOTTOMRIGHT", -4, 4)
+    f.scrollContent = scrollContent
+    f.playerRows = {}
+
+    listArea:EnableMouseWheel(true)
+    f.scrollOffset = 0
+    listArea:SetScript("OnMouseWheel", function(_, delta)
+        local maxRows = f.totalPlayers or 0
+        local visible = math.floor((scrollContent:GetHeight() or 300) / ROW_H)
+        local maxOff = math.max(0, maxRows - visible)
+        f.scrollOffset = math.max(0, math.min(f.scrollOffset - delta, maxOff))
+        OneGuild:RefreshDKPDistribution()
+    end)
+
+    -- ===== BOTTOM: DKP AMOUNT BUTTONS =====
+    local bottomBar = CreateFrame("Frame", nil, f)
+    bottomBar:SetHeight(50)
+    bottomBar:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
+    bottomBar:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
+
+    local amountLabel = bottomBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    amountLabel:SetPoint("LEFT", bottomBar, "LEFT", 14, 12)
+    amountLabel:SetText("|cFFDDB866DKP-Betrag:|r")
+
+    -- Preset buttons
+    local presets = { -20, -10, 10, 20, 50 }
+    local presetBtns = {}
+    local prevAnchor = amountLabel
+
+    for _, val in ipairs(presets) do
+        local btn = CreateFrame("Button", nil, bottomBar, "BackdropTemplate")
+        btn:SetSize(42, 24)
+        btn:SetPoint("LEFT", prevAnchor, "RIGHT", 4, 0)
+        btn:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 6,
+            insets   = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+
+        local isNeg = val < 0
+        btn:SetBackdropColor(isNeg and 0.4 or 0.1, isNeg and 0.1 or 0.35, 0.1, 0.9)
+        btn:SetBackdropBorderColor(isNeg and 0.7 or 0.3, isNeg and 0.2 or 0.6, isNeg and 0.2 or 0.3, 0.6)
+
+        local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        btnText:SetPoint("CENTER")
+        local prefix = val > 0 and "+" or ""
+        local color = isNeg and "|cFFFF6666" or "|cFF66FF66"
+        btnText:SetText(color .. prefix .. tostring(val) .. "|r")
+
+        btn:SetScript("OnClick", function()
+            OneGuild:ApplyDKPToSelected(val)
+        end)
+        btn:SetScript("OnEnter", function(self)
+            self:SetBackdropColor(isNeg and 0.55 or 0.15, isNeg and 0.15 or 0.45, 0.15, 1)
+        end)
+        btn:SetScript("OnLeave", function(self)
+            self:SetBackdropColor(isNeg and 0.4 or 0.1, isNeg and 0.1 or 0.35, 0.1, 0.9)
+        end)
+
+        table.insert(presetBtns, btn)
+        prevAnchor = btn
+    end
+
+    -- Custom amount box
+    local customBox = CreateFrame("EditBox", nil, bottomBar, "BackdropTemplate")
+    customBox:SetSize(50, 24)
+    customBox:SetPoint("LEFT", prevAnchor, "RIGHT", 8, 0)
+    customBox:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 6,
+        insets   = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    customBox:SetBackdropColor(0.1, 0.06, 0.04, 1)
+    customBox:SetBackdropBorderColor(0.5, 0.35, 0.1, 0.6)
+    customBox:SetFontObject("GameFontHighlight")
+    customBox:SetAutoFocus(false)
+    customBox:SetMaxLetters(6)
+    customBox:SetNumeric(false)
+    customBox:SetTextInsets(4, 4, 0, 0)
+    customBox:SetJustifyH("CENTER")
+    customBox:SetText("0")
+    customBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+    -- Apply custom button
+    local applyBtn = CreateFrame("Button", nil, bottomBar, "BackdropTemplate")
+    applyBtn:SetSize(60, 24)
+    applyBtn:SetPoint("LEFT", customBox, "RIGHT", 4, 0)
+    applyBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 6,
+        insets   = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    applyBtn:SetBackdropColor(0.3, 0.2, 0.05, 0.9)
+    applyBtn:SetBackdropBorderColor(0.6, 0.4, 0.1, 0.6)
+    local applyText = applyBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    applyText:SetPoint("CENTER")
+    applyText:SetText("|cFFFFD700Anwenden|r")
+    applyBtn:SetScript("OnClick", function()
+        local val = tonumber(customBox:GetText())
+        if val and val ~= 0 then
+            OneGuild:ApplyDKPToSelected(val)
+        end
+    end)
+
+    f:Hide()
+    dkpDistFrame = f
+    self:RefreshDKPDistribution()
+    f:Show()
+end
+
+------------------------------------------------------------------------
+-- Refresh DKP Distribution player list
+------------------------------------------------------------------------
+function OneGuild:RefreshDKPDistribution()
+    if not dkpDistFrame or not dkpDistFrame:IsShown() then return end
+    local f = dkpDistFrame
+
+    -- Collect all players: from global groups + all raid signups
+    local players = {}   -- { name = "short", fullName = "Full-Realm", group = g or nil, dkp = n }
+    local seen = {}
+
+    -- From global groups
+    local rg = (self.db and self.db.raidGroups) or {}
+    for g = 1, 8 do
+        if rg[g] then
+            for s = 1, 5 do
+                local pName = rg[g][s]
+                if pName and not seen[pName] then
+                    seen[pName] = true
+                    local short = strsplit("-", pName)
+                    seen[short] = true
+                    local dkp = (self.db.dkp and (self.db.dkp[pName] or self.db.dkp[short])) or 0
+                    table.insert(players, {
+                        name     = short,
+                        fullName = pName,
+                        group    = g,
+                        dkp      = dkp,
+                    })
+                end
+            end
+        end
+    end
+
+    -- From all raid signups (not yet grouped)
+    if self.db and self.db.raids then
+        for _, rd in ipairs(self.db.raids) do
+            if rd.signups then
+                for sName, sData in pairs(rd.signups) do
+                    local st = type(sData) == "table" and sData.status or sData
+                    if st and st ~= "declined" and st ~= "withdrawn" and st ~= "none" then
+                        local short = strsplit("-", sName)
+                        if not seen[sName] and not seen[short] then
+                            seen[sName] = true
+                            seen[short] = true
+                            local dkp = (self.db.dkp and (self.db.dkp[sName] or self.db.dkp[short])) or 0
+                            table.insert(players, {
+                                name     = short,
+                                fullName = sName,
+                                group    = nil,
+                                dkp      = dkp,
+                            })
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Sort by group (grouped first), then by name
+    table.sort(players, function(a, b)
+        if (a.group ~= nil) ~= (b.group ~= nil) then return a.group ~= nil end
+        if a.group and b.group and a.group ~= b.group then return a.group < b.group end
+        return a.name < b.name
+    end)
+
+    f.totalPlayers = #players
+    f.playerData = players
+
+    local scroll = f.scrollContent
+    local ROW_H = 22
+    local visible = math.floor((scroll:GetHeight() or 300) / ROW_H)
+
+    -- Preserve check state
+    local checkState = {}
+    if f.playerRows then
+        for _, pr in ipairs(f.playerRows) do
+            if pr.fullName and pr.cb then
+                checkState[pr.fullName] = pr.cb:GetChecked()
+            end
+        end
+    end
+
+    -- Create / reuse rows
+    for i = 1, math.max(visible, #f.playerRows) do
+        local dataIdx = i + (f.scrollOffset or 0)
+        local p = players[dataIdx]
+        local row = f.playerRows[i]
+
+        if not row then
+            row = CreateFrame("Frame", nil, scroll, "BackdropTemplate")
+            row:SetHeight(ROW_H)
+            row:SetPoint("TOPLEFT", scroll, "TOPLEFT", 0, -((i - 1) * ROW_H))
+            row:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, -((i - 1) * ROW_H))
+            row:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+
+            row.cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+            row.cb:SetSize(18, 18)
+            row.cb:SetPoint("LEFT", row, "LEFT", 4, 0)
+
+            row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.nameText:SetPoint("LEFT", row, "LEFT", 30, 0)
+            row.nameText:SetWidth(160)
+            row.nameText:SetJustifyH("LEFT")
+
+            row.dkpText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.dkpText:SetPoint("LEFT", row, "LEFT", 200, 0)
+            row.dkpText:SetWidth(70)
+
+            row.newDkpText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.newDkpText:SetPoint("LEFT", row, "LEFT", 280, 0)
+            row.newDkpText:SetWidth(70)
+
+            row.groupText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            row.groupText:SetPoint("LEFT", row, "LEFT", 360, 0)
+
+            f.playerRows[i] = row
+        end
+
+        if p then
+            row:Show()
+            row.fullName = p.fullName
+            row.nameText:SetText(p.name)
+            row.dkpText:SetText("|cFFFFD700" .. tostring(p.dkp) .. "|r")
+            row.newDkpText:SetText("")
+            row.groupText:SetText(p.group and ("|cFF8B7355G" .. p.group .. "|r") or "|cFF555555-|r")
+
+            -- Alternate row colors
+            if dataIdx % 2 == 0 then
+                row:SetBackdropColor(0.08, 0.04, 0.03, 0.5)
+            else
+                row:SetBackdropColor(0.05, 0.03, 0.02, 0.3)
+            end
+
+            -- Restore check state (default checked for new players)
+            if checkState[p.fullName] ~= nil then
+                row.cb:SetChecked(checkState[p.fullName])
+            else
+                row.cb:SetChecked(true)
+            end
+        else
+            row:Hide()
+            row.fullName = nil
+        end
+    end
+
+    -- Update selected count
+    local selCount = 0
+    for _, pr in ipairs(f.playerRows) do
+        if pr:IsShown() and pr.cb:GetChecked() then
+            selCount = selCount + 1
+        end
+    end
+    f.selectedCount:SetText("|cFF8B7355" .. selCount .. "/" .. #players .. " ausgewählt|r")
+end
+
+------------------------------------------------------------------------
+-- Apply DKP to all selected players
+------------------------------------------------------------------------
+function OneGuild:ApplyDKPToSelected(amount)
+    if not dkpDistFrame or not dkpDistFrame.playerRows then return end
+    if not self.db then return end
+    if not self.db.dkp then self.db.dkp = {} end
+
+    local f = dkpDistFrame
+    local bonusType = f.selectedBonus or "manual"
+    local applied = 0
+
+    for _, row in ipairs(f.playerRows) do
+        if row:IsShown() and row.cb and row.cb:GetChecked() and row.fullName then
+            local pName = row.fullName
+            local short = strsplit("-", pName)
+
+            -- Get current DKP
+            local current = self.db.dkp[pName] or self.db.dkp[short] or 0
+            local newVal = current + amount
+
+            -- Store locally
+            self.db.dkp[pName]  = newVal
+            self.db.dkp[short]  = newVal
+
+            -- Broadcast + officer note
+            if self.SendDKPUpdate then
+                self:SendDKPUpdate(pName, newVal)
+            end
+
+            -- Update row display
+            row.dkpText:SetText("|cFFFFD700" .. tostring(newVal) .. "|r")
+            local diffColor = amount >= 0 and "|cFF66FF66+" or "|cFFFF6666"
+            row.newDkpText:SetText(diffColor .. tostring(amount) .. "|r")
+
+            applied = applied + 1
+        end
+    end
+
+    if applied > 0 then
+        local prefix = amount >= 0 and "+" or ""
+        local bonusLabel = bonusType
+        for _, bt in ipairs(DKP_BONUS_TYPES) do
+            if bt.value == bonusType then bonusLabel = bt.label; break end
+        end
+        self:PrintSuccess(prefix .. tostring(amount) .. " DKP (" .. bonusLabel .. ") an " .. applied .. " Spieler verteilt!")
+    end
+
+    -- Refresh members tab
+    if self.RefreshMembers then self:RefreshMembers() end
 end

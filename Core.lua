@@ -18,7 +18,7 @@ OneGuild.REQUIRED_GUILD = "One"
 ------------------------------------------------------------------------
 -- Version & Constants
 ------------------------------------------------------------------------
-OneGuild.VERSION = "1.0.6"
+OneGuild.VERSION = "1.0.7"
 
 ------------------------------------------------------------------------
 -- Admin Whitelist  –  Characters listed here get auto-admin rights.
@@ -588,3 +588,47 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         end
     end
 end)
+
+------------------------------------------------------------------------
+-- Officer Note DKP Storage
+-- Format in officer note: "DKP:123"
+------------------------------------------------------------------------
+function OneGuild:SaveDKPToOfficerNote(memberKey, dkpVal)
+    if not IsInGuild() then return end
+    if not CanEditOfficerNote or not CanEditOfficerNote() then return end
+
+    local shortName = strsplit("-", memberKey)
+    local numGuild = GetNumGuildMembers() or 0
+    for i = 1, numGuild do
+        local gName, _, _, _, _, _, _, officerNote = GetGuildRosterInfo(i)
+        if gName then
+            local gs = strsplit("-", gName)
+            if gs == shortName or gName == memberKey then
+                local newNote = "DKP:" .. tostring(dkpVal)
+                GuildRosterSetOfficerNote(i, newNote)
+                self:Debug("DKP in Offiziersnotiz gespeichert: " .. gs .. " = " .. tostring(dkpVal))
+                return
+            end
+        end
+    end
+end
+
+function OneGuild:LoadDKPFromOfficerNotes()
+    if not IsInGuild() then return end
+    if not self.db then return end
+    if not self.db.dkp then self.db.dkp = {} end
+
+    local numGuild = GetNumGuildMembers() or 0
+    for i = 1, numGuild do
+        local gName, _, _, _, _, _, _, officerNote = GetGuildRosterInfo(i)
+        if gName and officerNote then
+            local dkpStr = officerNote:match("DKP:(-?%d+)")
+            if dkpStr then
+                local dkpVal = tonumber(dkpStr) or 0
+                self.db.dkp[gName] = dkpVal
+                local short = strsplit("-", gName)
+                self.db.dkp[short] = dkpVal
+            end
+        end
+    end
+end
