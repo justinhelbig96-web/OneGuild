@@ -66,48 +66,89 @@ SlashCmdList["OGAPI"] = function()
     end
 end
 
--- Minimal isolated test: /ogtest  (tests all SetNote variants)
+-- Minimal isolated test: /ogtest  (tests all SetNote variants + Club API)
 SLASH_OGTEST1 = "/ogtest"
 SlashCmdList["OGTEST"] = function()
     local myName = UnitName("player")
     local numGuild = GetNumGuildMembers() or 0
-    -- Check permissions first
+    
     print("|cFFFFB800[OG-Test] === BERECHTIGUNGEN ===|r")
-    print("|cFF00FFFF  IsGuildOfficer() = " .. tostring(IsGuildOfficer and IsGuildOfficer()) .. "|r")
     if C_GuildInfo then
         print("|cFF00FFFF  CanEditOfficerNote() = " .. tostring(C_GuildInfo.CanEditOfficerNote and C_GuildInfo.CanEditOfficerNote()) .. "|r")
-        print("|cFF00FFFF  CanViewOfficerNote() = " .. tostring(C_GuildInfo.CanViewOfficerNote and C_GuildInfo.CanViewOfficerNote()) .. "|r")
     end
-    print("|cFFFFB800[OG-Test] Suche " .. myName .. " in " .. numGuild .. " Mitgliedern...|r")
+    
+    -- Find player index
+    local myIndex, myGUID
     for i = 1, numGuild do
-        local gName, _, rankIdx, _, _, _, _, officerNote, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
+        local gName, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
         if gName then
             local gs = strsplit("-", gName)
             if gs == myName then
-                print("|cFF00FFFF[OG-Test] Gefunden: Index=" .. i .. " Rank=" .. tostring(rankIdx) .. " GUID=" .. tostring(guid) .. "|r")
-                print("|cFF00FFFF[OG-Test] Aktuelle OfficerNote: '" .. tostring(officerNote) .. "'|r")
-                
-                -- Test 1: SetNote with false (should be officer note)
-                print("|cFFFFAA00[OG-Test] Test 1: SetNote(guid, 'TEST-FALSE', false)|r")
-                local ok1, err1 = pcall(C_GuildInfo.SetNote, guid, "TEST-FALSE", false)
-                print("|cFF00FFFF  Result: ok=" .. tostring(ok1) .. " err=" .. tostring(err1) .. "|r")
-                
-                -- Test 2: SetNote with true (should be public note)  
-                print("|cFFFFAA00[OG-Test] Test 2: SetNote(guid, 'TEST-TRUE', true)|r")
-                local ok2, err2 = pcall(C_GuildInfo.SetNote, guid, "TEST-TRUE", true)
-                print("|cFF00FFFF  Result: ok=" .. tostring(ok2) .. " err=" .. tostring(err2) .. "|r")
-                
-                -- Test 3: SetNote with only 2 args (no boolean)
-                print("|cFFFFAA00[OG-Test] Test 3: SetNote(guid, 'TEST-NOARG')|r")
-                local ok3, err3 = pcall(C_GuildInfo.SetNote, guid, "TEST-NOARG")
-                print("|cFF00FFFF  Result: ok=" .. tostring(ok3) .. " err=" .. tostring(err3) .. "|r")
-                
-                print("|cFFFFB800[OG-Test] Pruefe jetzt deine Notiz + Offiziersnotiz im Gildenfenster!|r")
-                return
+                myIndex = i
+                myGUID = guid
+                break
             end
         end
     end
-    print("|cFFFF4444[OG-Test] Nicht gefunden!|r")
+    if not myIndex then
+        print("|cFFFF4444[OG-Test] Nicht gefunden!|r")
+        return
+    end
+    print("|cFF00FFFF[OG-Test] Gefunden: Index=" .. myIndex .. " GUID=" .. tostring(myGUID) .. "|r")
+    
+    -- Test 4: SetNote with INDEX (number) instead of GUID
+    print("|cFFFFAA00[OG-Test] Test 4: SetNote(index, 'DKP:999', false) -- index als Nummer|r")
+    local ok4, err4 = pcall(C_GuildInfo.SetNote, myIndex, "DKP:999", false)
+    print("|cFF00FFFF  Result: ok=" .. tostring(ok4) .. " err=" .. tostring(err4) .. "|r")
+    
+    -- Test 5: SetNote with INDEX and true
+    print("|cFFFFAA00[OG-Test] Test 5: SetNote(index, 'DKP:999', true) -- index + true|r")
+    local ok5, err5 = pcall(C_GuildInfo.SetNote, myIndex, "DKP:999", true)
+    print("|cFF00FFFF  Result: ok=" .. tostring(ok5) .. " err=" .. tostring(err5) .. "|r")
+
+    -- Test 6: Club API approach
+    print("|cFFFFAA00[OG-Test] === CLUB API ===|r")
+    if C_Club then
+        local clubId = C_Club.GetGuildClubId and C_Club.GetGuildClubId()
+        print("|cFF00FFFF  GuildClubId = " .. tostring(clubId) .. "|r")
+        if clubId then
+            local members = C_Club.GetClubMembers and C_Club.GetClubMembers(clubId)
+            if members then
+                print("|cFF00FFFF  Club hat " .. #members .. " Mitglieder|r")
+                -- Find our memberId
+                for _, memberId in ipairs(members) do
+                    local info = C_Club.GetMemberInfo(clubId, memberId)
+                    if info and info.name and info.name:find(myName) then
+                        print("|cFF00FFFF  Mein ClubMemberId = " .. tostring(memberId) .. "|r")
+                        print("|cFF00FFFF  info.officerNote = '" .. tostring(info.officerNote) .. "'|r")
+                        print("|cFF00FFFF  info.memberNote = '" .. tostring(info.memberNote) .. "'|r")
+                        
+                        -- Try Club API to set officer note
+                        if C_Club.SetClubMemberNote then
+                            print("|cFFFFAA00[OG-Test] Test 6a: C_Club.SetClubMemberNote(clubId, memberId, 'DKP:CLUB')|r")
+                            local ok6a, err6a = pcall(C_Club.SetClubMemberNote, clubId, memberId, "DKP:CLUB")
+                            print("|cFF00FFFF  Result: ok=" .. tostring(ok6a) .. " err=" .. tostring(err6a) .. "|r")
+                        end
+                        
+                        -- List all C_Club functions that contain "Note"
+                        print("|cFFFFAA00[OG-Test] C_Club Funktionen mit 'Note':|r")
+                        for k, v in pairs(C_Club) do
+                            if k:lower():find("note") then
+                                print("|cFF00FFFF  " .. k .. " = " .. type(v) .. "|r")
+                            end
+                        end
+                        break
+                    end
+                end
+            else
+                print("|cFFFF4444  GetClubMembers returned nil|r")
+            end
+        end
+    else
+        print("|cFFFF4444  C_Club existiert nicht!|r")
+    end
+    
+    print("|cFFFFB800[OG-Test] Pruefe Notiz + Offiziersnotiz im Gildenfenster!|r")
 end
 
 ------------------------------------------------------------------------
