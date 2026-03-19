@@ -61,6 +61,7 @@ local DEFAULTS = {
         mapLabelSize   = 10,
         mapPinAlpha    = 0.9,
         lootAutoPass   = true,    -- auto-pass in guild raids
+        dkpPermission  = "officer",  -- who can edit DKP: "leader", "officer", "raidlead", "all"
     },
     dismissed    = false,
     welcomeDismissedVersion = "",
@@ -244,6 +245,58 @@ function OneGuild:CheckAutoAdmin()
         self:PrintSuccess("Auto-Admin: Du bist Gildenmeister.")
         return
     end
+end
+
+------------------------------------------------------------------------
+-- DKP Permission Check
+-- Returns true if the current player can edit/distribute DKP
+------------------------------------------------------------------------
+function OneGuild:CanEditDKP()
+    local myName = UnitName("player") or ""
+
+    -- Whitelist always allowed
+    if self.ADMIN_WHITELIST and self.ADMIN_WHITELIST[myName] then return true end
+
+    -- Guild leader (rank 0) always allowed
+    local _, _, rankIndex = GetGuildInfo("player")
+    if rankIndex and rankIndex == 0 then return true end
+
+    -- Check setting
+    local perm = (self.db and self.db.settings and self.db.settings.dkpPermission) or "officer"
+
+    if perm == "leader" then
+        -- Only rank 0 + whitelist (already checked above)
+        return false
+    elseif perm == "officer" then
+        -- Officers = rank 0 or 1
+        if rankIndex and rankIndex <= 1 then return true end
+        return false
+    elseif perm == "raidlead" then
+        -- Officers + RL/Assist in raid
+        if rankIndex and rankIndex <= 1 then return true end
+        if IsInRaid() then
+            if UnitIsGroupLeader("player") or UnitIsGroupAssistant("player") then
+                return true
+            end
+        end
+        return false
+    elseif perm == "all" then
+        return true
+    end
+
+    return false
+end
+
+------------------------------------------------------------------------
+-- Permission Settings Check
+-- Only Whitelist + rank 0/1 can change permission settings
+------------------------------------------------------------------------
+function OneGuild:CanEditPermissions()
+    local myName = UnitName("player") or ""
+    if self.ADMIN_WHITELIST and self.ADMIN_WHITELIST[myName] then return true end
+    local _, _, rankIndex = GetGuildInfo("player")
+    if rankIndex and rankIndex ~= nil and rankIndex <= 1 then return true end
+    return false
 end
 
 ------------------------------------------------------------------------

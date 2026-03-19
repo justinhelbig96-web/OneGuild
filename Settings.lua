@@ -10,7 +10,7 @@ local _, OneGuild = ...
 -- Constants
 ------------------------------------------------------------------------
 local SETTINGS_W   = 460
-local SETTINGS_H   = 380
+local SETTINGS_H   = 420
 local TAB_BTN_W    = 120
 local TAB_BTN_H    = 28
 local CONTENT_PAD  = 14
@@ -306,12 +306,109 @@ local function BuildLootTab(content)
 end
 
 ------------------------------------------------------------------------
+--                     TAB: Berechtigungen (Permissions)
+------------------------------------------------------------------------
+local DKP_PERM_OPTIONS = {
+    { value = "leader",   label = "Nur Gildenleitung",        desc = "Nur Rang 0 (Gildenmeister) + Whitelist" },
+    { value = "officer",  label = "Offiziere",                desc = "Rang 0 + 1 (Offiziere) + Whitelist" },
+    { value = "raidlead", label = "Offiziere + Raidleiter",   desc = "Offiziere + RL/Assist im Raid + Whitelist" },
+    { value = "all",      label = "Alle Gildenmitglieder",    desc = "Jedes Gildenmitglied kann DKP bearbeiten" },
+}
+
+local permRadioButtons = {}
+
+local function BuildPermissionsTab(content)
+    Label(content, 0, 0, "Berechtigungen", 14, 1, 0.72, 0)
+    HLine(content, -22)
+
+    -- Warning if not allowed
+    local warningText = content:CreateFontString(nil, "OVERLAY")
+    warningText:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
+    warningText:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -32)
+    warningText:SetWidth(280)
+    warningText:SetJustifyH("LEFT")
+    warningText:SetTextColor(1, 0.3, 0.3)
+    warningText:SetText("")
+
+    Label(content, 0, -52, "Wer darf DKP bearbeiten / verteilen?", 12, 0.87, 0.78, 0.55)
+
+    local currentPerm = (OneGuild.db and OneGuild.db.settings and OneGuild.db.settings.dkpPermission) or "officer"
+    local canEdit = OneGuild.CanEditPermissions and OneGuild:CanEditPermissions() or false
+
+    if not canEdit then
+        warningText:SetText("Du hast keine Berechtigung, diese Einstellungen\nzu \195\164ndern. Nur Gildenleitung (Rang 0/1) und\nWhitelist k\195\182nnen dies \195\164ndern.")
+    end
+
+    permRadioButtons = {}
+    for i, opt in ipairs(DKP_PERM_OPTIONS) do
+        local yOff = -74 - ((i - 1) * 46)
+
+        local radioBtn = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
+        radioBtn:SetPoint("TOPLEFT", content, "TOPLEFT", 4, yOff)
+        radioBtn:SetSize(22, 22)
+        radioBtn:SetChecked(currentPerm == opt.value)
+
+        if not canEdit then
+            radioBtn:Disable()
+            radioBtn:SetAlpha(0.4)
+        end
+
+        local radioLabel = radioBtn:CreateFontString(nil, "OVERLAY")
+        radioLabel:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+        radioLabel:SetPoint("LEFT", radioBtn, "RIGHT", 4, 0)
+        radioLabel:SetTextColor(1, 0.84, 0)
+        radioLabel:SetText(opt.label)
+
+        local descLabel = content:CreateFontString(nil, "OVERLAY")
+        descLabel:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
+        descLabel:SetPoint("TOPLEFT", radioBtn, "BOTTOMLEFT", 26, -1)
+        descLabel:SetTextColor(0.6, 0.5, 0.35)
+        descLabel:SetText(opt.desc)
+
+        radioBtn:SetScript("OnClick", function()
+            if not OneGuild:CanEditPermissions() then
+                radioBtn:SetChecked(currentPerm == opt.value)
+                OneGuild:Print("|cFFFF4444Du hast keine Berechtigung, dies zu \195\164ndern.|r")
+                return
+            end
+            -- Uncheck all others, check this one
+            for _, rb in ipairs(permRadioButtons) do
+                rb.btn:SetChecked(false)
+            end
+            radioBtn:SetChecked(true)
+            OneGuild.db.settings.dkpPermission = opt.value
+            currentPerm = opt.value
+            OneGuild:PrintSuccess("DKP-Berechtigung ge\195\164ndert: " .. opt.label)
+        end)
+
+        table.insert(permRadioButtons, { btn = radioBtn, value = opt.value })
+    end
+
+    -- Whitelist info
+    local whitelistInfo = content:CreateFontString(nil, "OVERLAY")
+    whitelistInfo:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
+    whitelistInfo:SetPoint("TOPLEFT", content, "TOPLEFT", 4, -264)
+    whitelistInfo:SetWidth(280)
+    whitelistInfo:SetJustifyH("LEFT")
+    whitelistInfo:SetTextColor(0.55, 0.41, 0.08)
+
+    local whitelistNames = {}
+    if OneGuild.ADMIN_WHITELIST then
+        for name, _ in pairs(OneGuild.ADMIN_WHITELIST) do
+            table.insert(whitelistNames, name)
+        end
+    end
+    whitelistInfo:SetText("|cFFDDB866Whitelist (immer berechtigt):|r\n" .. (table.concat(whitelistNames, ", ")))
+end
+
+------------------------------------------------------------------------
 -- TAB DEFINITIONS — add new tabs here
 ------------------------------------------------------------------------
 local TAB_DEFS = {
-    { name = "Allgemein",  builder = BuildGeneralTab },
-    { name = "GuildMap",   builder = BuildGuildMapTab },
-    { name = "Loot",       builder = BuildLootTab },
+    { name = "Allgemein",       builder = BuildGeneralTab },
+    { name = "GuildMap",        builder = BuildGuildMapTab },
+    { name = "Loot",            builder = BuildLootTab },
+    { name = "Berechtigungen",  builder = BuildPermissionsTab },
 }
 
 ------------------------------------------------------------------------

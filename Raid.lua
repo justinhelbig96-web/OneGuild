@@ -300,6 +300,10 @@ function OneGuild:BuildRaidTab()
         self:SetBackdropBorderColor(0.7, 0.2, 0.2, 0.6)
     end)
     dkpBtn:SetScript("OnClick", function()
+        if not OneGuild.CanEditDKP or not OneGuild:CanEditDKP() then
+            OneGuild:Print("|cFFFF4444Du hast keine Berechtigung, DKP zu verteilen.|r")
+            return
+        end
         if OneGuild.ShowDKPDistribution then
             OneGuild:ShowDKPDistribution()
         end
@@ -1848,12 +1852,22 @@ function OneGuild:ShowDKPDistribution()
     customBox:SetBackdropBorderColor(0.5, 0.35, 0.1, 0.6)
     customBox:SetFontObject("GameFontHighlight")
     customBox:SetAutoFocus(false)
+    customBox:EnableMouse(true)
+    customBox:EnableKeyboard(true)
     customBox:SetMaxLetters(6)
     customBox:SetNumeric(false)
     customBox:SetTextInsets(4, 4, 0, 0)
     customBox:SetJustifyH("CENTER")
     customBox:SetText("0")
+    customBox:SetScript("OnMouseDown", function(self) self:SetFocus() end)
     customBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    customBox:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText())
+        if val and val ~= 0 then
+            OneGuild:ApplyDKPToSelected(val)
+        end
+        self:ClearFocus()
+    end)
 
     -- Apply custom button
     local applyBtn = CreateFrame("Button", nil, bottomBar, "BackdropTemplate")
@@ -1877,10 +1891,9 @@ function OneGuild:ShowDKPDistribution()
         end
     end)
 
-    f:Hide()
     dkpDistFrame = f
-    self:RefreshDKPDistribution()
     f:Show()
+    C_Timer.After(0.05, function() OneGuild:RefreshDKPDistribution() end)
 end
 
 ------------------------------------------------------------------------
@@ -2044,6 +2057,10 @@ end
 function OneGuild:ApplyDKPToSelected(amount)
     if not dkpDistFrame or not dkpDistFrame.playerRows then return end
     if not self.db then return end
+    if not self:CanEditDKP() then
+        self:Print("|cFFFF4444Du hast keine Berechtigung, DKP zu verteilen.|r")
+        return
+    end
     if not self.db.dkp then self.db.dkp = {} end
 
     local f = dkpDistFrame
