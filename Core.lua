@@ -30,12 +30,22 @@ local function SafeSetOfficerNote(index, note)
         return true
     end
     -- Retail TWW+: C_GuildInfo.SetNote(guid, note, isPublic)
-    -- isPublic=false means officer note
     if C_GuildInfo and C_GuildInfo.SetNote then
-        -- We need the GUID from GetGuildRosterInfo (17th return value)
-        local fullName, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(index)
+        local fullName, _, _, _, _, _, _, officerNote, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(index)
+        print("|cFF00FFFF[OG-Debug] SetNote Index=" .. tostring(index) .. " Name=" .. tostring(fullName) .. " GUID=" .. tostring(guid) .. " Note=" .. tostring(note) .. "|r")
         if guid then
+            -- Try officer note (isPublic=false)
             C_GuildInfo.SetNote(guid, note, false)
+            -- Verify: re-read to check if it was written
+            C_Timer.After(0.5, function()
+                local _, _, _, _, _, _, _, checkNote = GetGuildRosterInfo(index)
+                print("|cFF00FFFF[OG-Debug] Verify OfficerNote after SetNote(false): '" .. tostring(checkNote) .. "'|r")
+                if checkNote ~= note then
+                    print("|cFFFFAA00[OG-Debug] Officer note unchanged, trying SetNote with isPublic=true...|r")
+                    -- Maybe the boolean is inverted in this build
+                    -- DON'T actually do this yet, just report
+                end
+            end)
             return true
         else
             print("|cFFFF0000[OneGuild] ERROR: Kein GUID fuer Index " .. tostring(index) .. " (" .. tostring(fullName) .. ")|r")
