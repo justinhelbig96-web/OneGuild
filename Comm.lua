@@ -422,6 +422,21 @@ function OneGuild:ProcessHello(sender, data)
         characters    = existingChars,
     }
 
+    -- Check if this member has a newer addon version
+    if version and version ~= "?" then
+        local cmp = self:CompareVersions(version, self.VERSION)
+        if cmp > 0 then
+            -- Only update if this is newer than any previously seen
+            if not self.newerVersion or self:CompareVersions(version, self.newerVersion) > 0 then
+                self.newerVersion = version
+                self:Print(OneGuild.COLORS.WARNING ..
+                    "Neue Addon-Version v" .. version .. " verfuegbar! (du hast v" .. self.VERSION .. ")|r")
+                -- Refresh main UI to show update button
+                if self.UpdateVersionDisplay then self:UpdateVersionDisplay() end
+            end
+        end
+    end
+
     if self.RefreshMembers then self:RefreshMembers() end
 
     if isNew then

@@ -66,6 +66,79 @@ function OneGuild:BuildMainFrame()
     title:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -14)
     title:SetText(OneGuild.COLORS.TITLE .. "OneGuild|r  " ..
         OneGuild.COLORS.MUTED .. "v" .. OneGuild.VERSION .. "|r")
+    f.titleText = title
+
+    -- Update button (hidden by default, shown when newer version detected)
+    local updateBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
+    updateBtn:SetSize(130, 20)
+    updateBtn:SetPoint("LEFT", title, "RIGHT", 10, 0)
+    updateBtn:SetFrameLevel(titleBar:GetFrameLevel() + 5)
+    updateBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    updateBtn:SetBackdropColor(0.1, 0.5, 0.1, 0.9)
+    updateBtn:SetBackdropBorderColor(0.3, 0.8, 0.3, 0.8)
+
+    local updateIcon = updateBtn:CreateTexture(nil, "ARTWORK")
+    updateIcon:SetSize(14, 14)
+    updateIcon:SetPoint("LEFT", updateBtn, "LEFT", 5, 0)
+    updateIcon:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-Ready")
+
+    local updateText = updateBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    updateText:SetPoint("LEFT", updateIcon, "RIGHT", 3, 0)
+    updateText:SetText("|cFF66FF66Update!|r")
+    f.updateBtnText = updateText
+
+    updateBtn:SetScript("OnClick", function()
+        -- Show a popup with the GitHub URL to copy
+        StaticPopupDialogs["ONEGUILD_UPDATE"] = {
+            text = "|cFFFFB800OneGuild Update|r\n\nNeue Version: |cFF66FF66v" ..
+                (OneGuild.newerVersion or "?") .. "|r\nDeine Version: |cFFFF8800v" ..
+                OneGuild.VERSION .. "|r\n\nLade die neue Version hier herunter:\n|cFF88BBFF" ..
+                OneGuild.GITHUB_URL .. "|r\n\nURL wurde in den Chat geschrieben.",
+            button1 = "OK",
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+        StaticPopup_Show("ONEGUILD_UPDATE")
+        -- Print clickable link to chat (players can Shift-click URLs from chat)
+        print("|cFFFFB800[OneGuild]|r Neue Version v" .. (OneGuild.newerVersion or "?") ..
+            " herunterladen: |cFF88BBFF" .. OneGuild.GITHUB_URL .. "|r")
+    end)
+    updateBtn:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(0.15, 0.6, 0.15, 1)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:AddLine("|cFF66FF66Neue Version verfuegbar!|r")
+        GameTooltip:AddLine("Klicke fuer den Download-Link", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    updateBtn:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0.1, 0.5, 0.1, 0.9)
+        GameTooltip:Hide()
+    end)
+    updateBtn:Hide()
+    f.updateBtn = updateBtn
+
+    -- Function to update version display (called when newer version detected)
+    function OneGuild:UpdateVersionDisplay()
+        if not f or not f.updateBtn then return end
+        if self.newerVersion then
+            f.updateBtnText:SetText("|cFF66FF66v" .. self.newerVersion .. " Update!|r")
+            f.updateBtn:Show()
+            -- Flash the title to draw attention
+            f.titleText:SetText(OneGuild.COLORS.TITLE .. "OneGuild|r  " ..
+                "|cFFFF4444v" .. OneGuild.VERSION .. " (veraltet)|r")
+        else
+            f.updateBtn:Hide()
+            f.titleText:SetText(OneGuild.COLORS.TITLE .. "OneGuild|r  " ..
+                OneGuild.COLORS.MUTED .. "v" .. OneGuild.VERSION .. "|r")
+        end
+    end
 
     -- Guild name subtitle
     local subtitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -367,6 +440,9 @@ function OneGuild:BuildMainFrame()
 
     -- Show first tab
     self:ShowTab(1)
+
+    -- Check for update on open
+    if self.UpdateVersionDisplay then self:UpdateVersionDisplay() end
 
     -- ESC to close
     table.insert(UISpecialFrames, "OneGuildMainFrame")

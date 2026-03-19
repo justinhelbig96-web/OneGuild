@@ -75,6 +75,22 @@ OneGuild.isGuildVerified = false
 OneGuild.playerGuild     = nil
 OneGuild.playerName      = nil
 OneGuild.debugMode       = true   -- DEBUG: auf false setzen um Debug-Ausgaben zu deaktivieren
+OneGuild.newerVersion    = nil    -- set to newer version string if a guild member has a higher version
+
+--- Compare two semver strings ("1.2.3"). Returns 1 if a>b, -1 if a<b, 0 if equal.
+function OneGuild:CompareVersions(a, b)
+    if not a or not b then return 0 end
+    local a1, a2, a3 = strsplit(".", a)
+    local b1, b2, b3 = strsplit(".", b)
+    a1, a2, a3 = tonumber(a1) or 0, tonumber(a2) or 0, tonumber(a3) or 0
+    b1, b2, b3 = tonumber(b1) or 0, tonumber(b2) or 0, tonumber(b3) or 0
+    if a1 ~= b1 then return a1 > b1 and 1 or -1 end
+    if a2 ~= b2 then return a2 > b2 and 1 or -1 end
+    if a3 ~= b3 then return a3 > b3 and 1 or -1 end
+    return 0
+end
+
+OneGuild.GITHUB_URL = "https://github.com/justinhelbig96-web/OneGuild/releases"
 
 ------------------------------------------------------------------------
 -- Event Frame
