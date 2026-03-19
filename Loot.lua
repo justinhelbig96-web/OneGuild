@@ -61,6 +61,32 @@ local function GetMyFullName()
     return name .. "-" .. realm
 end
 
+--- Get current Lootmeister name from the active/selected raid
+local function GetCurrentLootmeister()
+    if not OneGuild.db or not OneGuild.db.raids then return nil end
+    -- Try the currently selected raid first
+    local idx = OneGuild.currentRaidIdx
+    if idx and OneGuild.db.raids[idx] then
+        local lm = OneGuild.db.raids[idx].lootmeister
+        if lm and lm ~= "" then return lm end
+    end
+    -- Fallback: scan all raids for one with a lootmeister set
+    for _, rd in ipairs(OneGuild.db.raids) do
+        if rd.lootmeister and rd.lootmeister ~= "" then
+            return rd.lootmeister
+        end
+    end
+    return nil
+end
+
+--- Check if the local player IS the Lootmeister
+local function IsLootmeister()
+    local lm = GetCurrentLootmeister()
+    if not lm then return false end
+    local myName = UnitName("player") or ""
+    return myName == lm
+end
+
 ------------------------------------------------------------------------
 -- Get all current raid member names
 ------------------------------------------------------------------------
@@ -94,10 +120,20 @@ local function OnStartLootRoll(rollID, rollTime, ...)
     -- Only in guild raids
     if not IsInGuildRaid() then return end
 
-    -- Raid Leader does NOT auto-pass — they need the item
-    if IsRaidLeader() then
-        OneGuild:Debug("Loot: Ich bin RL — KEIN Auto-Pass")
-        return
+    local lm = GetCurrentLootmeister()
+
+    -- If no Lootmeister is set, fall back to Raid Leader behavior
+    if not lm then
+        if IsRaidLeader() then
+            OneGuild:Debug("Loot: Kein LM gesetzt, ich bin RL — KEIN Auto-Pass")
+            return
+        end
+    else
+        -- Lootmeister does NOT auto-pass — they collect the loot
+        if IsLootmeister() then
+            OneGuild:Debug("Loot: Ich bin der Lootmeister (" .. lm .. ") — KEIN Auto-Pass")
+            return
+        end
     end
 
     -- Auto-pass on everything
@@ -107,7 +143,8 @@ local function OnStartLootRoll(rollID, rollTime, ...)
     end)
 
     -- Notify in chat
-    OneGuild:Print(OneGuild.COLORS.INFO .. "Auto-Pass aktiv — Loot geht an den Raid Leader.|r")
+    local target = lm or "Raid Leader"
+    OneGuild:Print(OneGuild.COLORS.INFO .. "Auto-Pass aktiv — Loot geht an den Lootmeister (" .. target .. ")|r")
 end
 
 --- Install the loot hook
@@ -133,8 +170,10 @@ function OneGuild:ActivateLootSystem()
 
     lootSystemActive = true
     self:EnableAutoPass()
+    local lm = GetCurrentLootmeister()
+    local target = lm and ("Lootmeister (" .. lm .. ")") or "Raid Leader"
     self:Print(OneGuild.COLORS.SUCCESS ..
-        "Loot-System aktiviert! Alle Items gehen automatisch an den Raid Leader.|r")
+        "Loot-System aktiviert! Alle Items gehen automatisch an den " .. target .. ".|r")
 end
 
 --- Deactivate loot system
