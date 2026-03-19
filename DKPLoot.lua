@@ -732,7 +732,7 @@ function OneGuild:StartAuction(itemLink, itemID, itemName, itemIcon, itemIlvl, i
         tostring(duration or 60),
         itemLink or "",
     }, "~")
-    self:SendCommMessage("ACS", payload)
+    self:SendAuctionMessage("ACS", payload)
 
     -- Play alert sound locally too
     self:PlayAuctionAlert()
@@ -832,8 +832,8 @@ function OneGuild:PlaceBid(amount)
         return
     end
 
-    -- Send bid via comm
-    self:SendCommMessage("ACB", tostring(amount))
+    -- Send bid via comm (RAID/PARTY channel for reliability)
+    self:SendAuctionMessage("ACB", tostring(amount))
 
     -- Also record locally
     local myFull = myName .. "-" .. (GetNormalizedRealmName() or GetRealmName() or "")
@@ -921,7 +921,7 @@ function OneGuild:EndAuction()
         auction.itemName or "?",
         auction.itemLink or "",
     }, "~")
-    self:SendCommMessage("ACE", endPayload)
+    self:SendAuctionMessage("ACE", endPayload)
 
     -- Clean up
     self.activeAuction = nil
@@ -960,7 +960,7 @@ function OneGuild:CancelAuction()
     })
 
     -- Broadcast cancel FIRST, while activeAuction still has data
-    self:SendCommMessage("ACC", "CANCEL")
+    self:SendAuctionMessage("ACC", "CANCEL")
 
     -- Clean up
     self.activeAuction = nil
@@ -1214,10 +1214,8 @@ function OneGuild:ProcessAuctionStart(sender, data)
     local itemID, itemName, itemIcon, itemIlvl, itemQuality, duration, itemLink =
         strsplit("~", data, 7)
 
-    -- Only show for players in the same group/raid
-    if not IsPlayerInMyGroup(sender) then
-        return
-    end
+    -- No group-member check needed: auction msgs are sent via RAID/PARTY channel
+    -- so only group members receive them
 
     -- Clean up any stale previous auction
     if self.auctionTimerTicker then
@@ -1307,35 +1305,53 @@ function OneGuild:ProcessAuctionEnd(sender, data)
         self.auctionTimerTicker = nil
     end
 
-    -- Hide bid window
-    if self.bidWindowFrame and self.bidWindowFrame:IsShown() then
+    -- Hide bid window robustly
+    if self.bidWindowFrame then
         self.bidWindowFrame:Hide()
     end
+    C_Timer.After(0.15, function()
+        if OneGuild.bidWindowFrame and OneGuild.bidWindowFrame:IsShown() then
+            OneGuild.bidWindowFrame:Hide()
+        end
+    end)
 
     self:RefreshDKPLoot()
 end
 
 function OneGuild:ProcessAuctionCancel(sender, data)
-    self:Print(self.COLORS.WARNING .. "Auktion abgebrochen von " .. ShortName(sender) .. "|r")
+    self:Print((self.COLORS and self.COLORS.WARNING or "|cFFFFCC00") .. "Auktion abgebrochen von " .. ShortName(sender) .. "|r")
 
-    -- Clean up auction state
+    -- Clean up auction state FIRST
     self.activeAuction = nil
     if self.auctionTimerTicker then
         self.auctionTimerTicker:Cancel()
         self.auctionTimerTicker = nil
     end
 
-    -- Force hide bid window (use C_Timer to ensure frame operations complete)
-    if self.bidWindowFrame then
-        self.bidWindowFrame:Hide()
+    -- Force hide bid window immediately + with fallback timers
+    local function HideBidWindow()
+        if OneGuild.bidWindowFrame then
+            OneGuild.bidWindowFrame:Hide()
+            OneGuild.bidWindowFrame:SetAlpha(0)
+        end
     end
 
-    C_Timer.After(0.1, function()
-        if OneGuild.bidWindowFrame and OneGuild.bidWindowFrame:IsShown() then
-            OneGuild.bidWindowFrame:Hide()
+    HideBidWindow()
+    C_Timer.After(0.05, HideBidWindow)
+    C_Timer.After(0.2, function()
+        HideBidWindow()
+        if OneGuild.bidWindowFrame then
+            OneGuild.bidWindowFrame:SetAlpha(1) -- restore for next auction
         end
-        OneGuild:RefreshDKPLoot()
     end)
 
+    -- Also close new auction dialog if open
+    if self.newAuctionFrame and self.newAuctionFrame:IsShown() then
+        self.newAuctionFrame:Hide()
+    end
+
     self:RefreshDKPLoot()
+    C_Timer.After(0.3, function()
+        OneGuild:RefreshDKPLoot()
+    end)
 end

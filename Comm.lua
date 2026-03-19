@@ -92,6 +92,29 @@ function OneGuild:SendCommMessage(msgType, data)
 end
 
 ------------------------------------------------------------------------
+-- Send auction message to RAID or PARTY channel (more reliable than GUILD)
+-- Falls back to GUILD if not in a group
+------------------------------------------------------------------------
+function OneGuild:SendAuctionMessage(msgType, data)
+    if not isCommReady then return end
+
+    local payload = msgType
+    if data then payload = msgType .. ":" .. data end
+
+    if IsInRaid() then
+        C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "RAID")
+        self:Debug("AUC TX [RAID]: " .. strsub(payload, 1, 80))
+    elseif IsInGroup() then
+        C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "PARTY")
+        self:Debug("AUC TX [PARTY]: " .. strsub(payload, 1, 80))
+    elseif IsInGuild() then
+        -- Fallback to GUILD if somehow not in group
+        C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "GUILD")
+        self:Debug("AUC TX [GUILD fallback]: " .. strsub(payload, 1, 80))
+    end
+end
+
+------------------------------------------------------------------------
 -- FullSync  -- broadcast EVERYTHING (called on init, button & timer)
 ------------------------------------------------------------------------
 function OneGuild:FullSync()
@@ -337,7 +360,8 @@ end
 ------------------------------------------------------------------------
 function OneGuild:HandleAddonMessage(prefix, message, channel, sender)
     if prefix ~= COMM_PREFIX then return end
-    if channel ~= "GUILD" then return end
+    -- Accept GUILD, RAID, and PARTY channels (auction msgs use RAID/PARTY)
+    if channel ~= "GUILD" and channel ~= "RAID" and channel ~= "PARTY" then return end
 
     -- Ignore our own messages
     local myName  = UnitName("player")
