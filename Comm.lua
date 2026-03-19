@@ -11,7 +11,7 @@ local _, OneGuild = ...
 -- Constants
 ------------------------------------------------------------------------
 local COMM_PREFIX = "OGuild1"
-local SYNC_INTERVAL = 60            -- full auto-sync every 60 seconds
+local SYNC_INTERVAL = 180           -- full auto-sync every 180 seconds (3 min)
 
 -- Message types (keep short — WoW addon message limit is 255 bytes)
 local MSG_HELLO    = "HI"           -- presence / main info
@@ -63,6 +63,14 @@ function OneGuild:InitComm()
     -- Initial broadcast after a short delay
     C_Timer.After(4, function()
         OneGuild:FullSync()
+    end)
+
+    -- Request other members to also send their data (for new members)
+    -- Send MSG_SYNC with short delay so others respond
+    C_Timer.After(6, function()
+        if OneGuild:IsAuthorized() then
+            OneGuild:SendCommMessage(MSG_SYNC)
+        end
     end)
 
     -- Auto-sync every SYNC_INTERVAL seconds
@@ -120,10 +128,14 @@ end
 function OneGuild:FullSync()
     if not self:IsAuthorized() then return end
 
-    self:BroadcastPresence()
-    self:SendCommMessage(MSG_SYNC)
+    -- Clean up stale tombstones (older than 7 days)
+    self:CleanOldTombstones()
 
-    local delay = 1
+    self:BroadcastPresence()
+    -- Do NOT broadcast MSG_SYNC — avoid thundering herd!
+    -- MSG_SYNC was causing every member to respond with FullSync simultaneously.
+
+    local delay = 0.5
     -- characters
     delay = self:BroadcastCharacters(delay)
     -- raids
@@ -243,7 +255,7 @@ function OneGuild:BroadcastAllRaids(startDelay)
     local delay = startDelay or 0
 
     for idx, rd in ipairs(self.db.raids) do
-        delay = delay + 0.3
+        delay = delay + 0.4
         C_Timer.After(delay, function()
             if not OneGuild:IsAuthorized() then return end
             OneGuild:SendSingleRaid(rd)
@@ -252,7 +264,7 @@ function OneGuild:BroadcastAllRaids(startDelay)
         -- Send each signup
         if rd.signups then
             for player, signup in pairs(rd.signups) do
-                delay = delay + 0.2
+                delay = delay + 0.3
                 C_Timer.After(delay, function()
                     if not OneGuild:IsAuthorized() then return end
                     OneGuild:SendRaidSignup(rd, player, signup)
@@ -306,7 +318,7 @@ function OneGuild:BroadcastAllEvents(startDelay)
     local delay = startDelay or 0
 
     for idx, ev in ipairs(self.db.events) do
-        delay = delay + 0.3
+        delay = delay + 0.4
         C_Timer.After(delay, function()
             if not OneGuild:IsAuthorized() then return end
             OneGuild:SendSingleEvent(ev)
@@ -314,7 +326,7 @@ function OneGuild:BroadcastAllEvents(startDelay)
 
         if ev.signups then
             for player, signup in pairs(ev.signups) do
-                delay = delay + 0.2
+                delay = delay + 0.3
                 C_Timer.After(delay, function()
                     if not OneGuild:IsAuthorized() then return end
                     OneGuild:SendEventSignup(ev, player, signup)
@@ -386,10 +398,14 @@ function OneGuild:HandleAddonMessage(prefix, message, channel, sender)
         end
     elseif msgType == MSG_HELLO    then self:ProcessHello(sender, data)
     elseif msgType == MSG_SYNC     then
-        -- Respond to a sync request with a random delay to avoid flooding
-        C_Timer.After(math.random() * 3, function()
-            if OneGuild:IsAuthorized() then OneGuild:FullSync() end
-        end)
+        -- Only respond if we are the highest-priority online member (guild leader/officer)
+        -- to avoid thundering herd (all members responding at once)
+        local _, _, myRankIdx = GetGuildInfo("player")
+        if myRankIdx and myRankIdx <= 1 then
+            C_Timer.After(math.random() * 5 + 2, function()
+                if OneGuild:IsAuthorized() then OneGuild:FullSync() end
+            end)
+        end
     elseif msgType == MSG_CHARINFO then self:ProcessCharInfo(sender, data)
     elseif msgType == MSG_RAID     then self:ProcessRaid(sender, data)
     elseif msgType == MSG_RAIDSIGN then self:ProcessRaidSignup(sender, data)
@@ -483,6 +499,14 @@ function OneGuild:ProcessHello(sender, data)
     if isNew then
         self:Debug(OneGuild.COLORS.SUCCESS ..
             "Neues Addon-Mitglied entdeckt: " .. sender .. "|r")
+        -- New member appeared — push our data to them after a random delay
+        -- so they receive raids, events, DKP etc. without waiting for next FullSync
+        C_Timer.After(math.random() * 4 + 2, function()
+            if OneGuild:IsAuthorized() then
+                OneGuild:Debug("Sending FullSync for new member: " .. sender)
+                OneGuild:FullSync()
+            end
+        end)
     end
 end
 
@@ -762,7 +786,7 @@ function OneGuild:BroadcastTombstones(startDelay)
 
     if self.db.deletedRaids then
         for delKey, _ in pairs(self.db.deletedRaids) do
-            delay = delay + 0.2
+            delay = delay + 0.3
             C_Timer.After(delay, function()
                 if not OneGuild:IsAuthorized() then return end
                 local created, author = strsplit(":", delKey, 2)
@@ -773,7 +797,7 @@ function OneGuild:BroadcastTombstones(startDelay)
 
     if self.db.deletedEvents then
         for delKey, _ in pairs(self.db.deletedEvents) do
-            delay = delay + 0.2
+            delay = delay + 0.3
             C_Timer.After(delay, function()
                 if not OneGuild:IsAuthorized() then return end
                 local created, author = strsplit(":", delKey, 2)
@@ -784,6 +808,41 @@ function OneGuild:BroadcastTombstones(startDelay)
 
     return delay
 end
+
+------------------------------------------------------------------------
+-- CleanOldTombstones  -- remove tombstones older than 7 days
+------------------------------------------------------------------------
+function OneGuild:CleanOldTombstones()
+    local maxAge = 7 * 24 * 60 * 60  -- 7 days in seconds
+    local now = time()
+
+    if self.db.deletedRaids then
+        local keysToRemove = {}
+        for delKey, ts in pairs(self.db.deletedRaids) do
+            local deletedAt = tonumber(ts) or 0
+            if deletedAt > 0 and (now - deletedAt) > maxAge then
+                table.insert(keysToRemove, delKey)
+            end
+        end
+        for _, k in ipairs(keysToRemove) do
+            self.db.deletedRaids[k] = nil
+        end
+    end
+
+    if self.db.deletedEvents then
+        local keysToRemove = {}
+        for delKey, ts in pairs(self.db.deletedEvents) do
+            local deletedAt = tonumber(ts) or 0
+            if deletedAt > 0 and (now - deletedAt) > maxAge then
+                table.insert(keysToRemove, delKey)
+            end
+        end
+        for _, k in ipairs(keysToRemove) do
+            self.db.deletedEvents[k] = nil
+        end
+    end
+end
+
 function OneGuild:GetAddonMemberCount()
     if not self.db or not self.db.addonMembers then return 0 end
     local count = 0
@@ -1038,7 +1097,7 @@ function OneGuild:BroadcastAllDKP(startDelay)
     local delay = startDelay or 0
 
     for memberKey, dkpVal in pairs(self.db.dkp) do
-        delay = delay + 0.2
+        delay = delay + 0.3
         C_Timer.After(delay, function()
             if not OneGuild:IsAuthorized() then return end
             OneGuild:SendCommMessage(MSG_DKP, memberKey .. "|" .. tostring(dkpVal))
