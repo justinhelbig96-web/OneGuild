@@ -66,6 +66,28 @@ SlashCmdList["OGAPI"] = function()
     end
 end
 
+-- Minimal isolated test: /ogtest  (writes "DKP:TEST" to YOUR officer note)
+SLASH_OGTEST1 = "/ogtest"
+SlashCmdList["OGTEST"] = function()
+    local myName = UnitName("player")
+    local numGuild = GetNumGuildMembers() or 0
+    print("|cFFFFB800[OG-Test] Suche " .. myName .. " in " .. numGuild .. " Mitgliedern...|r")
+    for i = 1, numGuild do
+        local gName, _, _, _, _, _, _, officerNote, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
+        if gName then
+            local gs = strsplit("-", gName)
+            if gs == myName then
+                print("|cFF00FFFF[OG-Test] Gefunden: Index=" .. i .. " GUID=" .. tostring(guid) .. " OfficerNote='" .. tostring(officerNote) .. "'|r")
+                print("|cFF00FFFF[OG-Test] Rufe C_GuildInfo.SetNote(guid, 'DKP:TEST', false) auf...|r")
+                local ok, err = pcall(C_GuildInfo.SetNote, guid, "DKP:TEST", false)
+                print("|cFF00FFFF[OG-Test] pcall result: ok=" .. tostring(ok) .. " err=" .. tostring(err) .. "|r")
+                return
+            end
+        end
+    end
+    print("|cFFFF4444[OG-Test] Nicht gefunden!|r")
+end
+
 ------------------------------------------------------------------------
 -- Admin Whitelist  –  now loaded from SavedVariables (db.settings.whitelist)
 -- Guild leader (rank index 0) is always auto-admin.
