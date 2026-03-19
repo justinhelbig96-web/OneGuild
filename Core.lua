@@ -859,7 +859,8 @@ function OneGuild:SaveDKPToOfficerNote(memberKey, dkpVal)
             local gs = strsplit("-", gName)
             if gs == shortName or gName == memberKey then
                 local newNote = "DKP:" .. tostring(dkpVal)
-                GuildRosterSetOfficerNote(i, newNote)
+                C_GuildInfo.SetOfficerNote(i, newNote)
+                print("|cFF00FF00[OneGuild] SetGuildNote_DKP_" .. gs .. " : " .. tostring(dkpVal) .. "|r")
                 self:Debug("DKP in Offiziersnotiz gespeichert: " .. gs .. " = " .. tostring(dkpVal))
                 -- Force roster refresh so other online members get the update
                 self:RequestGuildRoster()
@@ -926,7 +927,8 @@ function OneGuild:PushAllDKPToOfficerNotes()
                 -- Only write if different or missing
                 if currentDKP ~= localDKP then
                     local newNote = "DKP:" .. tostring(localDKP)
-                    GuildRosterSetOfficerNote(i, newNote)
+                    C_GuildInfo.SetOfficerNote(i, newNote)
+                    print("|cFF00FF00[OneGuild] SetGuildNote_DKP_" .. gs .. " : " .. tostring(localDKP) .. "|r")
                     pushed = pushed + 1
                 end
             end

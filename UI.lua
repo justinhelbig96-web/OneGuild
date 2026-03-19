@@ -191,7 +191,7 @@ function OneGuild:BuildMainFrame()
 
     -- GREEN SYNC BUTTON (visible on all tabs)
     local syncBtn = CreateFrame("Button", nil, titleBar, "BackdropTemplate")
-    syncBtn:SetSize(80, 24)
+    syncBtn:SetSize(60, 24)
     syncBtn:SetPoint("RIGHT", gearBtn, "LEFT", -4, -1)
     syncBtn:RegisterForClicks("AnyUp")
     syncBtn:SetBackdrop({
