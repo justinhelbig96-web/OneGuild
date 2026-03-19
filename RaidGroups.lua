@@ -664,6 +664,14 @@ function OneGuild:RefreshRaidGroups()
 
     -- Get addon-managed raidGroups from current raid
     local raidIdx = self.currentRaidIdx
+    -- Fallback: if no raid selected, use first available
+    if not raidIdx and self.db and self.db.raids then
+        for idx, _ in ipairs(self.db.raids) do
+            raidIdx = idx
+            self.currentRaidIdx = idx
+            break
+        end
+    end
     local rd = (raidIdx and self.db and self.db.raids and self.db.raids[raidIdx]) or nil
     local raidGroups = (rd and rd.raidGroups) or {}
     local signups = (rd and rd.signups) or {}

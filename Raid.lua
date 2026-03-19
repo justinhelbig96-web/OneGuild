@@ -251,6 +251,13 @@ function OneGuild:BuildRaidTab()
         self:SetBackdropBorderColor(0.4, 0.3, 0.6, 0.6)
     end)
     groupsBtn:SetScript("OnClick", function()
+        -- Use first visible raid if no specific one selected
+        if not OneGuild.currentRaidIdx and OneGuild.db and OneGuild.db.raids then
+            for idx, _ in ipairs(OneGuild.db.raids) do
+                OneGuild.currentRaidIdx = idx
+                break
+            end
+        end
         if OneGuild.ToggleRaidGroups then
             OneGuild:ToggleRaidGroups()
         end
@@ -485,6 +492,13 @@ function OneGuild:BuildRaidTab()
             GameTooltip:Hide()
         end)
         row.groupsBtn:SetScript("OnClick", function()
+            -- Use first visible raid if no specific one selected
+            if not OneGuild.currentRaidIdx and OneGuild.db and OneGuild.db.raids then
+                for idx2, _ in ipairs(OneGuild.db.raids) do
+                    OneGuild.currentRaidIdx = idx2
+                    break
+                end
+            end
             if OneGuild.ToggleRaidGroups then
                 OneGuild:ToggleRaidGroups()
             end
