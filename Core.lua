@@ -18,7 +18,7 @@ OneGuild.REQUIRED_GUILD = "One"
 ------------------------------------------------------------------------
 -- Version & Constants
 ------------------------------------------------------------------------
-OneGuild.VERSION = "1.0.8"
+OneGuild.VERSION = "1.0.8c"
 
 ------------------------------------------------------------------------
 -- Admin Whitelist  –  Characters listed here get auto-admin rights.
@@ -673,6 +673,13 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         if OneGuild:IsAuthorized() and OneGuild.RefreshMembers then
             OneGuild:RefreshMembers()
         end
+        -- Load DKP from officer notes (throttled to avoid spam)
+        if OneGuild:IsAuthorized() and OneGuild.LoadDKPFromOfficerNotes then
+            if not OneGuild._lastOfficerNoteLoad or (time() - OneGuild._lastOfficerNoteLoad) >= 10 then
+                OneGuild._lastOfficerNoteLoad = time()
+                OneGuild:LoadDKPFromOfficerNotes()
+            end
+        end
 
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
@@ -747,16 +754,20 @@ function OneGuild:LoadDKPFromOfficerNotes()
     if not self.db.dkp then self.db.dkp = {} end
 
     local numGuild = GetNumGuildMembers() or 0
+    local loaded = 0
     for i = 1, numGuild do
         local gName, _, _, _, _, _, _, officerNote = GetGuildRosterInfo(i)
         if gName and officerNote then
             local dkpStr = officerNote:match("DKP:(-?%d+)")
             if dkpStr then
                 local dkpVal = tonumber(dkpStr) or 0
-                self.db.dkp[gName] = dkpVal
-                local short = strsplit("-", gName)
-                self.db.dkp[short] = dkpVal
+                -- Use centralized setter to store under all known keys
+                self:SetDKPForPlayer(gName, dkpVal)
+                loaded = loaded + 1
             end
         end
+    end
+    if loaded > 0 then
+        self:Debug("DKP aus Offiziersnotizen geladen: " .. loaded .. " Spieler")
     end
 end

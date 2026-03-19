@@ -23,9 +23,28 @@ local function ShortName(name)
 end
 
 local function IsPlayerInMyGroup(name)
+    if not IsInGroup() then return false end
     local short = ShortName(name)
-    if UnitInRaid(short) then return true end
-    if UnitInParty(short) then return true end
+    -- Check raid roster
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local rName = GetRaidRosterInfo(i)
+            if rName then
+                local rs = ShortName(rName)
+                if rs == short then return true end
+            end
+        end
+    else
+        -- Party check
+        for i = 1, GetNumGroupMembers() - 1 do
+            local unit = "party" .. i
+            local uName = UnitName(unit)
+            if uName and ShortName(uName) == short then return true end
+        end
+        -- Also check self
+        local myName = UnitName("player")
+        if myName and ShortName(myName) == short then return true end
+    end
     return false
 end
 
@@ -940,7 +959,7 @@ function OneGuild:CancelAuction()
         timestamp  = time(),
     })
 
-    -- Broadcast cancel
+    -- Broadcast cancel FIRST, while activeAuction still has data
     self:SendCommMessage("ACC", "CANCEL")
 
     -- Clean up
@@ -951,7 +970,7 @@ function OneGuild:CancelAuction()
     end
 
     -- Hide bid window
-    if self.bidWindowFrame and self.bidWindowFrame:IsShown() then
+    if self.bidWindowFrame then
         self.bidWindowFrame:Hide()
     end
 
@@ -1196,10 +1215,16 @@ function OneGuild:ProcessAuctionStart(sender, data)
         strsplit("~", data, 7)
 
     -- Only show for players in the same group/raid
-    if not IsPlayerInMyGroup(sender) and not (ShortName(sender) == ShortName(UnitName("player"))) then
-        -- Not in same group, ignore
+    if not IsPlayerInMyGroup(sender) then
         return
     end
+
+    -- Clean up any stale previous auction
+    if self.auctionTimerTicker then
+        self.auctionTimerTicker:Cancel()
+        self.auctionTimerTicker = nil
+    end
+    self.activeAuction = nil
 
     self.activeAuction = {
         itemLink    = itemLink or "",
@@ -1293,17 +1318,24 @@ end
 function OneGuild:ProcessAuctionCancel(sender, data)
     self:Print(self.COLORS.WARNING .. "Auktion abgebrochen von " .. ShortName(sender) .. "|r")
 
-    -- Clean up
+    -- Clean up auction state
     self.activeAuction = nil
     if self.auctionTimerTicker then
         self.auctionTimerTicker:Cancel()
         self.auctionTimerTicker = nil
     end
 
-    -- Hide bid window
-    if self.bidWindowFrame and self.bidWindowFrame:IsShown() then
+    -- Force hide bid window (use C_Timer to ensure frame operations complete)
+    if self.bidWindowFrame then
         self.bidWindowFrame:Hide()
     end
+
+    C_Timer.After(0.1, function()
+        if OneGuild.bidWindowFrame and OneGuild.bidWindowFrame:IsShown() then
+            OneGuild.bidWindowFrame:Hide()
+        end
+        OneGuild:RefreshDKPLoot()
+    end)
 
     self:RefreshDKPLoot()
 end

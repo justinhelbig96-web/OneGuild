@@ -2088,6 +2088,9 @@ function OneGuild:ApplyDKPToSelected(amount)
     local bonusType = f.selectedBonus or "manual"
     local applied = 0
 
+    -- Collect all players to update first
+    local updates = {}
+
     for _, row in ipairs(f.playerRows) do
         if row:IsShown() and row.cb and row.cb:GetChecked() and row.fullName then
             local pName = row.fullName
@@ -2099,11 +2102,6 @@ function OneGuild:ApplyDKPToSelected(amount)
 
             -- Store locally (centralized — sets ALL keys)
             self:SetDKPForPlayer(pName, newVal)
-
-            -- Broadcast + officer note
-            if self.SendDKPUpdate then
-                self:SendDKPUpdate(pName, newVal)
-            end
 
             -- Update row display
             row.dkpText:SetText("|cFFFFD700" .. tostring(newVal) .. "|r")
@@ -2119,8 +2117,18 @@ function OneGuild:ApplyDKPToSelected(amount)
                 self:AddDKPHistory(pName, amount, newVal, bonusLabel, UnitName("player") or "?")
             end
 
+            table.insert(updates, { name = pName, dkp = newVal })
             applied = applied + 1
         end
+    end
+
+    -- Stagger comm messages to avoid WoW throttle (0.15s per message)
+    for idx, upd in ipairs(updates) do
+        C_Timer.After((idx - 1) * 0.15, function()
+            if OneGuild.SendDKPUpdate then
+                OneGuild:SendDKPUpdate(upd.name, upd.dkp)
+            end
+        end)
     end
 
     if applied > 0 then
