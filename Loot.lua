@@ -61,21 +61,11 @@ local function GetMyFullName()
     return name .. "-" .. realm
 end
 
---- Get current Lootmeister name from the active/selected raid
+--- Get current Lootmeister name (global setting)
 local function GetCurrentLootmeister()
-    if not OneGuild.db or not OneGuild.db.raids then return nil end
-    -- Try the currently selected raid first
-    local idx = OneGuild.currentRaidIdx
-    if idx and OneGuild.db.raids[idx] then
-        local lm = OneGuild.db.raids[idx].lootmeister
-        if lm and lm ~= "" then return lm end
-    end
-    -- Fallback: scan all raids for one with a lootmeister set
-    for _, rd in ipairs(OneGuild.db.raids) do
-        if rd.lootmeister and rd.lootmeister ~= "" then
-            return rd.lootmeister
-        end
-    end
+    if not OneGuild.db then return nil end
+    local lm = OneGuild.db.lootmeister
+    if lm and lm ~= "" then return lm end
     return nil
 end
 

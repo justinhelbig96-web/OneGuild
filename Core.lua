@@ -49,6 +49,8 @@ local DEFAULTS = {
     dkp          = {},        -- { ["Name-Realm"] = number }  DKP per member
     deletedRaids  = {},       -- { ["created:author"] = true }  tombstones for deleted raids
     deletedEvents = {},       -- { ["created:author"] = true }  tombstones for deleted events
+    raidGroups   = {},        -- global raid groups { [1..8] = { "Name", ... } }
+    lootmeister  = nil,       -- global lootmeister name (short)
     settings     = {
         minimap        = true,
         soundAlerts    = true,

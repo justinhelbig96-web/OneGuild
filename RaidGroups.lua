@@ -216,29 +216,29 @@ end
 -- Move player to group (addon-managed)
 ------------------------------------------------------------------------
 MoveToGroup = function(playerName, targetGroup)
-    local raidIdx = OneGuild.currentRaidIdx
-    if not raidIdx or not OneGuild.db or not OneGuild.db.raids then return end
-    local rd = OneGuild.db.raids[raidIdx]
-    if not rd then return end
-    if not rd.raidGroups then rd.raidGroups = {} end
+    if not OneGuild.db then return end
+    if not OneGuild.db.raidGroups then OneGuild.db.raidGroups = {} end
+    local rg = OneGuild.db.raidGroups
 
     -- Remove from any existing group first
     for g = 1, MAX_GROUPS do
-        if rd.raidGroups[g] then
-            for i = #rd.raidGroups[g], 1, -1 do
-                if rd.raidGroups[g][i] == playerName then
-                    table.remove(rd.raidGroups[g], i)
+        if rg[g] then
+            for i = #rg[g], 1, -1 do
+                if rg[g][i] == playerName then
+                    table.remove(rg[g], i)
                 end
             end
         end
     end
 
     -- Add to target group (max 5)
-    if not rd.raidGroups[targetGroup] then rd.raidGroups[targetGroup] = {} end
-    if #rd.raidGroups[targetGroup] < MAX_PER_GROUP then
-        table.insert(rd.raidGroups[targetGroup], playerName)
+    if not rg[targetGroup] then rg[targetGroup] = {} end
+    if #rg[targetGroup] < MAX_PER_GROUP then
+        table.insert(rg[targetGroup], playerName)
     end
 
+    -- Broadcast to guild
+    OneGuild:BroadcastGlobalGroups()
     OneGuild:RefreshRaidGroups()
 end
 
@@ -246,21 +246,22 @@ end
 -- Remove player from all groups (back to roster)
 ------------------------------------------------------------------------
 RemoveFromGroup = function(playerName)
-    local raidIdx = OneGuild.currentRaidIdx
-    if not raidIdx or not OneGuild.db or not OneGuild.db.raids then return end
-    local rd = OneGuild.db.raids[raidIdx]
-    if not rd or not rd.raidGroups then return end
+    if not OneGuild.db then return end
+    local rg = OneGuild.db.raidGroups
+    if not rg then return end
 
     for g = 1, MAX_GROUPS do
-        if rd.raidGroups[g] then
-            for i = #rd.raidGroups[g], 1, -1 do
-                if rd.raidGroups[g][i] == playerName then
-                    table.remove(rd.raidGroups[g], i)
+        if rg[g] then
+            for i = #rg[g], 1, -1 do
+                if rg[g][i] == playerName then
+                    table.remove(rg[g], i)
                 end
             end
         end
     end
 
+    -- Broadcast to guild
+    OneGuild:BroadcastGlobalGroups()
     OneGuild:RefreshRaidGroups()
 end
 
@@ -358,36 +359,31 @@ function OneGuild:BuildRaidGroupsFrame()
             lmMenu:Hide()
             return
         end
-        -- Rebuild menu from signups
+        -- Rebuild menu from signups across ALL raids
         for _, old in ipairs(f.lmMenuItems) do old:Hide() end
         wipe(f.lmMenuItems)
 
-        local curRaidIdx = OneGuild.currentRaidIdx
-        -- Fallback: pick first raid if none selected
-        if not curRaidIdx and OneGuild.db and OneGuild.db.raids then
-            for idx, _ in ipairs(OneGuild.db.raids) do
-                curRaidIdx = idx
-                OneGuild.currentRaidIdx = idx
-                break
-            end
-        end
-
         local entries = {}
+        local seen = {}
         -- "None" option
         table.insert(entries, { name = "", display = "|cFF888888-- keiner --|r" })
-        local rd = curRaidIdx and OneGuild.db and OneGuild.db.raids and OneGuild.db.raids[curRaidIdx]
-        if rd then
-            local sigs = rd.signups or {}
-            for sName, sData in pairs(sigs) do
-                local st = type(sData) == "table" and sData.status or sData
-                -- Accept any signup that isn't declined/withdrawn
-                if st and st ~= "declined" and st ~= "withdrawn" and st ~= "none" then
-                    local short = strsplit("-", sName)
-                    table.insert(entries, { name = short, display = "|cFFFFD700" .. short .. "|r" })
+
+        if OneGuild.db and OneGuild.db.raids then
+            for _, rd in ipairs(OneGuild.db.raids) do
+                if rd.signups then
+                    for sName, sData in pairs(rd.signups) do
+                        local st = type(sData) == "table" and sData.status or sData
+                        if st and st ~= "declined" and st ~= "withdrawn" and st ~= "none" then
+                            local short = strsplit("-", sName)
+                            if not seen[short] then
+                                seen[short] = true
+                                table.insert(entries, { name = short, display = "|cFFFFD700" .. short .. "|r" })
+                            end
+                        end
+                    end
                 end
             end
         end
-        print("|cFFFFB800[OneGuild]|r LM dropdown: raidIdx=" .. tostring(curRaidIdx) .. ", entries=" .. #entries)
 
         local itemH = 20
         lmMenu:SetSize(160, #entries * itemH + 8)
@@ -408,11 +404,12 @@ function OneGuild:BuildRaidGroupsFrame()
             item:SetScript("OnEnter", function(s) s:SetBackdropColor(0.3, 0.18, 0.05, 0.8) end)
             item:SetScript("OnLeave", function(s) s:SetBackdropColor(0, 0, 0, 0) end)
             item:SetScript("OnClick", function()
-                local ri = OneGuild.currentRaidIdx
-                if ri and OneGuild.db and OneGuild.db.raids and OneGuild.db.raids[ri] then
-                    OneGuild.db.raids[ri].lootmeister = (e.name ~= "") and e.name or nil
+                if OneGuild.db then
+                    OneGuild.db.lootmeister = (e.name ~= "") and e.name or nil
                 end
                 lmMenu:Hide()
+                -- Broadcast LM to guild
+                OneGuild:BroadcastGlobalLM()
                 OneGuild:RefreshRaidGroups()
             end)
             table.insert(f.lmMenuItems, item)
@@ -675,19 +672,22 @@ function OneGuild:RefreshRaidGroups()
         classLookup[m.name] = m.classFile
     end
 
-    -- Get addon-managed raidGroups from current raid
-    local raidIdx = self.currentRaidIdx
-    -- Fallback: if no raid selected, use first available
-    if not raidIdx and self.db and self.db.raids then
-        for idx, _ in ipairs(self.db.raids) do
-            raidIdx = idx
-            self.currentRaidIdx = idx
-            break
+    -- Get global raidGroups + gather signups from ALL raids
+    local raidGroups = (self.db and self.db.raidGroups) or {}
+
+    -- Collect signups from ALL raids (global groups = global roster)
+    local signups = {}
+    if self.db and self.db.raids then
+        for _, rd in ipairs(self.db.raids) do
+            if rd.signups then
+                for sName, sData in pairs(rd.signups) do
+                    if not signups[sName] then
+                        signups[sName] = sData
+                    end
+                end
+            end
         end
     end
-    local rd = (raidIdx and self.db and self.db.raids and self.db.raids[raidIdx]) or nil
-    local raidGroups = (rd and rd.raidGroups) or {}
-    local signups = (rd and rd.signups) or {}
 
     -- Build set of all grouped player names (short names)
     local groupedNames = {}
@@ -738,24 +738,22 @@ function OneGuild:RefreshRaidGroups()
     local rosterEntries = {}
     local signupNames = {}
 
-    -- Get signups from selected raid (exclude grouped)
-    if rd then
-        for name, s in pairs(signups) do
-            local st = type(s) == "table" and s.status or s
-            if st and st ~= "declined" and st ~= "withdrawn" and st ~= "none" then
-                local short = strsplit("-", name)
-                if not groupedNames[name] and not groupedNames[short] then
-                    table.insert(rosterEntries, {
-                        name      = name,
-                        shortName = short,
-                        role      = (type(s) == "table" and s.role) or "DD",
-                        classFile = classLookup[name] or classLookup[short],
-                        isSignup  = true,
-                    })
-                end
-                signupNames[name] = true
-                signupNames[short] = true
+    -- Get signups from all raids (exclude grouped)
+    for name, s in pairs(signups) do
+        local st = type(s) == "table" and s.status or s
+        if st and st ~= "declined" and st ~= "withdrawn" and st ~= "none" then
+            local short = strsplit("-", name)
+            if not groupedNames[name] and not groupedNames[short] then
+                table.insert(rosterEntries, {
+                    name      = name,
+                    shortName = short,
+                    role      = (type(s) == "table" and s.role) or "DD",
+                    classFile = classLookup[name] or classLookup[short],
+                    isSignup  = true,
+                })
             end
+            signupNames[name] = true
+            signupNames[short] = true
         end
     end
 
@@ -900,9 +898,9 @@ function OneGuild:RefreshRaidGroups()
         end
     end
 
-    -- Lootmeister button text
+    -- Lootmeister button text (global)
     if f.lmBtnText then
-        local lm = rd and rd.lootmeister
+        local lm = self.db and self.db.lootmeister
         if lm and lm ~= "" then
             f.lmBtnText:SetText("|cFFFF8800" .. lm .. "|r")
         else

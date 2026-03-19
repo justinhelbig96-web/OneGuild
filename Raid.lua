@@ -660,7 +660,6 @@ function OneGuild:RefreshRaid()
                 OneGuild:DeleteRaid(raidIdx)
             end)
             row.groupsBtn:SetScript("OnClick", function()
-                OneGuild.currentRaidIdx = raidIdx
                 if OneGuild.ToggleRaidGroups then
                     OneGuild:ToggleRaidGroups()
                 end

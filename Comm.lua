@@ -31,6 +31,8 @@ local MSG_LCHECK   = "LCK"          -- loot addon-check request
 local MSG_LREPLY   = "LCR"          -- loot addon-check response
 local MSG_LACTIVATE = "LAP"         -- loot auto-pass activate/deactivate
 local MSG_RGROUPS  = "RGS"          -- raid groups sync
+local MSG_GGROUP   = "GGR"          -- global group assignment sync
+local MSG_GLM      = "GLM"          -- global lootmeister sync
 
 ------------------------------------------------------------------------
 -- State
@@ -373,6 +375,10 @@ function OneGuild:HandleAddonMessage(prefix, message, channel, sender)
         if self.HandleLootActivate then self:HandleLootActivate(sender, data) end
     elseif msgType == MSG_RGROUPS  then
         -- Raid groups sync (display only, no action needed for now)
+    elseif msgType == MSG_GGROUP   then
+        self:ProcessGlobalGroups(sender, data)
+    elseif msgType == MSG_GLM      then
+        self:ProcessGlobalLM(sender, data)
     elseif msgType == MSG_BYE      then
         if self.db and self.db.addonMembers and self.db.addonMembers[sender] then
             self.db.addonMembers[sender].online = false
@@ -1006,4 +1012,58 @@ function OneGuild:ProcessDKP(sender, data)
     self.db.dkp[memberKey] = dkpVal
 
     if self.RefreshMembers then self:RefreshMembers() end
+end
+
+------------------------------------------------------------------------
+-- Global Raid Groups sync
+-- Format: "g1name1,g1name2;g2name1,g2name2;...;g8name1,g8name2"
+-- Each group separated by ";", names within a group by ","
+------------------------------------------------------------------------
+function OneGuild:BroadcastGlobalGroups()
+    if not self.db then return end
+    local groups = self.db.raidGroups or {}
+    local parts = {}
+    for g = 1, 8 do
+        local members = groups[g] or {}
+        parts[g] = table.concat(members, ",")
+    end
+    self:SendCommMessage(MSG_GGROUP, table.concat(parts, ";"))
+end
+
+function OneGuild:ProcessGlobalGroups(sender, data)
+    if not data or not self.db then return end
+    if not self.db.raidGroups then self.db.raidGroups = {} end
+
+    local groupStrs = { strsplit(";", data) }
+    for g = 1, 8 do
+        local gStr = groupStrs[g] or ""
+        if gStr == "" then
+            self.db.raidGroups[g] = {}
+        else
+            self.db.raidGroups[g] = { strsplit(",", gStr) }
+        end
+    end
+
+    -- Refresh UI if open
+    if self.RefreshRaidGroups then self:RefreshRaidGroups() end
+end
+
+------------------------------------------------------------------------
+-- Global Lootmeister sync
+------------------------------------------------------------------------
+function OneGuild:BroadcastGlobalLM()
+    if not self.db then return end
+    local lm = self.db.lootmeister or ""
+    self:SendCommMessage(MSG_GLM, lm)
+end
+
+function OneGuild:ProcessGlobalLM(sender, data)
+    if not self.db then return end
+    if data and data ~= "" then
+        self.db.lootmeister = data
+    else
+        self.db.lootmeister = nil
+    end
+    -- Refresh UI if open
+    if self.RefreshRaidGroups then self:RefreshRaidGroups() end
 end
