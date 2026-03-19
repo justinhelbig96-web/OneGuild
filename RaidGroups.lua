@@ -41,6 +41,15 @@ local CLASS_COLORS_FB = {
     EVOKER      = { r = 0.20, g = 0.58, b = 0.50 },
 }
 
+-- Role icon texture (for signup display)
+local ROLE_TEX    = "Interface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES"
+local ROLE_COORDS = {
+    TANK   = { 0,        19/64,  22/64, 41/64 },
+    HEALER = { 20/64,    39/64,  1/64,  20/64 },
+    DD     = { 20/64,    39/64,  22/64, 41/64 },
+}
+local ROLE_LABELS_SHORT = { TANK = "Tank", HEALER = "Healer", DD = "DD" }
+
 local function GetCC(cf)
     if not cf then return 0.7, 0.7, 0.7 end
     if RAID_CLASS_COLORS and RAID_CLASS_COLORS[cf] then
@@ -376,9 +385,9 @@ function OneGuild:BuildRaidGroupsFrame()
     rosterPanel:SetBackdropBorderColor(0.4, 0.3, 0.1, 0.5)
     f.rosterPanel = rosterPanel
 
-    local rosterTitle = rosterPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    rosterTitle:SetPoint("TOP", rosterPanel, "TOP", 0, -4)
-    rosterTitle:SetText("|cFFFFB800Spieler|r")
+    f.rosterTitle = rosterPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    f.rosterTitle:SetPoint("TOP", rosterPanel, "TOP", 0, -4)
+    f.rosterTitle:SetText("|cFFFFB800Spieler|r")
 
     -- Scrollable roster area
     local rosterScroll = CreateFrame("Frame", nil, rosterPanel)
@@ -510,20 +519,90 @@ function OneGuild:RefreshRaidGroups()
     end
 
     -- ===== Update roster panel =====
-    -- Sort by class then name
-    table.sort(allMembers, function(a, b)
-        if a.classFile ~= b.classFile then return a.classFile < b.classFile end
+    -- Build roster from raid signups + actual raid members
+    local rosterEntries = {}
+    local signupNames = {}
+    local raidIdx = self.currentRaidIdx
+
+    -- Build guild class lookup
+    local classLookup = {}
+    local numGuild = GetNumGuildMembers() or 0
+    for gi = 1, numGuild do
+        local gName, _, _, _, _, _, _, _, _, _, classFile = GetGuildRosterInfo(gi)
+        if gName then
+            local gShort = strsplit("-", gName)
+            classLookup[gShort] = classFile
+            classLookup[gName] = classFile
+        end
+    end
+    for _, m in ipairs(allMembers) do
+        local mShort = strsplit("-", m.name)
+        classLookup[mShort] = m.classFile
+        classLookup[m.name] = m.classFile
+    end
+
+    -- Get signups from selected raid
+    if raidIdx and self.db and self.db.raids and self.db.raids[raidIdx] then
+        local rd = self.db.raids[raidIdx]
+        local signups = rd.signups or {}
+        for name, s in pairs(signups) do
+            if type(s) == "table" and s.status == "accepted" then
+                local short = strsplit("-", name)
+                table.insert(rosterEntries, {
+                    name      = name,
+                    shortName = short,
+                    role      = s.role or "DD",
+                    classFile = classLookup[name] or classLookup[short],
+                    isSignup  = true,
+                })
+                signupNames[name] = true
+                signupNames[short] = true
+            end
+        end
+    end
+
+    -- Add actual raid members not already in signups
+    for _, m in ipairs(allMembers) do
+        local short = strsplit("-", m.name)
+        if not signupNames[m.name] and not signupNames[short] then
+            table.insert(rosterEntries, {
+                name      = m.name,
+                shortName = short,
+                role      = nil,
+                classFile = m.classFile,
+                group     = m.group,
+                online    = m.online,
+                isSignup  = false,
+            })
+        end
+    end
+
+    -- Sort: signups first (by role), then raid members (by class)
+    local roleSort = { TANK = 1, HEALER = 2, DD = 3 }
+    table.sort(rosterEntries, function(a, b)
+        if a.isSignup ~= b.isSignup then return a.isSignup end
+        if a.isSignup and b.isSignup then
+            local ra = roleSort[a.role] or 9
+            local rb = roleSort[b.role] or 9
+            if ra ~= rb then return ra < rb end
+        end
         return a.name < b.name
     end)
 
+    -- Update roster title
+    if raidIdx and self.db and self.db.raids and self.db.raids[raidIdx] then
+        f.rosterTitle:SetText("|cFFFFB800Spieler|r |cFF8B7355(" .. (self.db.raids[raidIdx].title or "Raid") .. ")|r")
+    else
+        f.rosterTitle:SetText("|cFFFFB800Spieler|r")
+    end
+
     local scroll = f.rosterScroll
     -- Reuse or create cells
-    for i, member in ipairs(allMembers) do
+    for i, entry in ipairs(rosterEntries) do
         local cell = rosterCells[i]
         if not cell then
             cell = CreateFrame("Button", nil, scroll)
             cell:SetSize(ROSTER_W - 12, CELL_H)
-            cell:SetPoint("TOPLEFT", scroll, "TOPLEFT", 2, -((i - 1) * (CELL_H + 1)))
             cell:EnableMouse(true)
             cell:RegisterForDrag("LeftButton")
 
@@ -531,11 +610,16 @@ function OneGuild:RefreshRaidGroups()
             cell.bg:SetAllPoints()
             cell.bg:SetColorTexture(0.08, 0.05, 0.03, 0.4)
 
+            cell.roleIcon = cell:CreateTexture(nil, "ARTWORK")
+            cell.roleIcon:SetSize(14, 14)
+            cell.roleIcon:SetPoint("LEFT", cell, "LEFT", 2, 0)
+            cell.roleIcon:SetTexture(ROLE_TEX)
+
             cell.text = cell:CreateFontString(nil, "OVERLAY")
             cell.text:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
-            cell.text:SetPoint("LEFT", cell, "LEFT", 3, 0)
+            cell.text:SetPoint("LEFT", cell.roleIcon, "RIGHT", 2, 0)
             cell.text:SetJustifyH("LEFT")
-            cell.text:SetWidth(ROSTER_W - 20)
+            cell.text:SetWidth(ROSTER_W - 36)
             cell.text:SetWordWrap(false)
 
             cell:SetScript("OnDragStart", function(self)
@@ -551,6 +635,9 @@ function OneGuild:RefreshRaidGroups()
                 if self.playerName then
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                     GameTooltip:AddLine(self.playerName)
+                    if self.signupRole then
+                        GameTooltip:AddLine("|cFFDDB866Rolle: " .. (ROLE_LABELS_SHORT[self.signupRole] or "?") .. "|r")
+                    end
                     local st = GetAddonStatus(self.playerName)
                     if st == "ok" then
                         GameTooltip:AddLine("|cFF66FF66Addon aktiv (v" .. (OneGuild.VERSION or "?") .. ")|r")
@@ -573,22 +660,35 @@ function OneGuild:RefreshRaidGroups()
             rosterCells[i] = cell
         end
 
-        cell.playerName  = member.name
-        cell.playerClass = member.classFile
+        cell:ClearAllPoints()
+        cell:SetPoint("TOPLEFT", scroll, "TOPLEFT", 2, -((i - 1) * (CELL_H + 1)))
 
-        local short = strsplit("-", member.name)
-        local display = ClassHex(member.classFile) .. short .. "|r"
-        display = display .. AddonStatusIcon(GetAddonStatus(member.name))
-        -- Show group number
-        display = display .. " |cFF555555[" .. member.group .. "]|r"
+        cell.playerName  = entry.name
+        cell.playerClass = entry.classFile
+        cell.signupRole  = entry.role
+
+        -- Role icon
+        if entry.role and ROLE_COORDS[entry.role] then
+            local c = ROLE_COORDS[entry.role]
+            cell.roleIcon:SetTexCoord(c[1], c[2], c[3], c[4])
+            cell.roleIcon:Show()
+        else
+            cell.roleIcon:Hide()
+        end
+
+        local display = ClassHex(entry.classFile) .. entry.shortName .. "|r"
+        display = display .. AddonStatusIcon(GetAddonStatus(entry.name))
+        if entry.group then
+            display = display .. " |cFF555555[" .. entry.group .. "]|r"
+        end
 
         cell.text:SetText(display)
-        cell:SetAlpha(member.online and 1 or 0.4)
+        cell:SetAlpha((entry.online == false) and 0.4 or 1)
         cell:Show()
     end
 
     -- Hide unused cells
-    for i = #allMembers + 1, #rosterCells do
+    for i = #rosterEntries + 1, #rosterCells do
         rosterCells[i]:Hide()
     end
 

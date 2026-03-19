@@ -9,7 +9,7 @@ local _, OneGuild = ...
 ------------------------------------------------------------------------
 -- Constants
 ------------------------------------------------------------------------
-local RAID_ROW_HEIGHT = 120
+local RAID_ROW_HEIGHT = 80
 local MAX_RAID_ROWS   = 5
 
 -- Role icon texture (LFGFrame, 64x64)
@@ -161,23 +161,6 @@ local function GetPlayerRaidSignup(signups, playerName)
         return s.status or "none", s.role
     end
     return s, nil
-end
-
-------------------------------------------------------------------------
--- Helper: group signed-up players by role
-------------------------------------------------------------------------
-local function GetSignupPlayersByRole(signups)
-    local roleNames = { TANK = {}, HEALER = {}, DD = {} }
-    if not signups then return roleNames end
-    for name, s in pairs(signups) do
-        if type(s) == "table" and s.status == "accepted" and s.role then
-            if roleNames[s.role] then
-                local short = strsplit("-", name)
-                table.insert(roleNames[s.role], short)
-            end
-        end
-    end
-    return roleNames
 end
 
 ------------------------------------------------------------------------
@@ -375,14 +358,6 @@ function OneGuild:BuildRaidTab()
         row.lootmeisterText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         row.lootmeisterText:SetPoint("LEFT", row.leaderText, "RIGHT", 12, 0)
         row.lootmeisterText:SetTextColor(1, 0.53, 0)
-
-        -- Signed-up player names (below buttons)
-        row.signupNamesText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.signupNamesText:SetPoint("TOPLEFT", row, "TOPLEFT", 48, -80)
-        row.signupNamesText:SetPoint("RIGHT", row, "RIGHT", -10, 0)
-        row.signupNamesText:SetJustifyH("LEFT")
-        row.signupNamesText:SetWordWrap(true)
-        row.signupNamesText:SetMaxLines(3)
 
         -- === Signup buttons (bottom row) ===
         local btnY  = -54
@@ -636,23 +611,6 @@ function OneGuild:RefreshRaid()
                 row.lootmeisterText:Hide()
             end
 
-            -- Signed-up player names
-            local roleNames = GetSignupPlayersByRole(signups)
-            local parts = {}
-            for _, rn in ipairs(ROLE_ORDER) do
-                if #roleNames[rn] > 0 then
-                    local names = table.concat(roleNames[rn], ", ")
-                    parts[#parts + 1] = "|cFFDDB866" .. ROLE_LABELS[rn] .. ":|r |cFFFFFFFF" .. names .. "|r"
-                end
-            end
-            if #parts > 0 then
-                row.signupNamesText:SetText("|cFF8B7355Spieler:|r  " .. table.concat(parts, "  |cFF555555-|r  "))
-                row.signupNamesText:Show()
-            else
-                row.signupNamesText:SetText("")
-                row.signupNamesText:Hide()
-            end
-
             -- Highlight active role button
             for _, role in ipairs(ROLE_ORDER) do
                 local rb = row.roleButtons[role]
@@ -686,6 +644,12 @@ function OneGuild:RefreshRaid()
             end)
             row.deleteBtn:SetScript("OnClick", function()
                 OneGuild:DeleteRaid(raidIdx)
+            end)
+            row.groupsBtn:SetScript("OnClick", function()
+                OneGuild.currentRaidIdx = raidIdx
+                if OneGuild.ToggleRaidGroups then
+                    OneGuild:ToggleRaidGroups()
+                end
             end)
 
             row:Show()
