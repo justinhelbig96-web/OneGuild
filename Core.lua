@@ -391,6 +391,17 @@ function OneGuild:GetAllDKPKeys(nameOrKey)
     return keys
 end
 
+------------------------------------------------------------------------
+-- Request fresh guild roster data from server
+------------------------------------------------------------------------
+function OneGuild:RequestGuildRoster()
+    if C_GuildInfo and C_GuildInfo.GuildRoster then
+        C_GuildInfo.GuildRoster()
+    elseif GuildRoster then
+        GuildRoster()
+    end
+end
+
 function OneGuild:GetDKPForPlayer(nameOrKey)
     if not self.db or not self.db.dkp then return 0 end
     local short = self:NormalizeDKPKey(nameOrKey)
@@ -707,11 +718,13 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         if OneGuild:IsAuthorized() and OneGuild.RefreshMembers then
             OneGuild:RefreshMembers()
         end
-        -- Load DKP from officer notes (throttled to avoid spam)
+        -- Load DKP from officer notes (throttled to 3s to stay responsive)
         if OneGuild:IsAuthorized() and OneGuild.LoadDKPFromOfficerNotes then
-            if not OneGuild._lastOfficerNoteLoad or (time() - OneGuild._lastOfficerNoteLoad) >= 10 then
+            if not OneGuild._lastOfficerNoteLoad or (time() - OneGuild._lastOfficerNoteLoad) >= 3 then
                 OneGuild._lastOfficerNoteLoad = time()
                 OneGuild:LoadDKPFromOfficerNotes()
+                -- Refresh DKP displays if visible
+                if OneGuild.RefreshMembers then OneGuild:RefreshMembers() end
             end
         end
 
@@ -776,6 +789,8 @@ function OneGuild:SaveDKPToOfficerNote(memberKey, dkpVal)
                 local newNote = "DKP:" .. tostring(dkpVal)
                 GuildRosterSetOfficerNote(i, newNote)
                 self:Debug("DKP in Offiziersnotiz gespeichert: " .. gs .. " = " .. tostring(dkpVal))
+                -- Force roster refresh so other online members get the update
+                self:RequestGuildRoster()
                 return
             end
         end
@@ -795,7 +810,7 @@ function OneGuild:LoadDKPFromOfficerNotes()
             local dkpStr = officerNote:match("DKP:(-?%d+)")
             if dkpStr then
                 local dkpVal = tonumber(dkpStr) or 0
-                -- Use centralized setter to store under all known keys
+                -- Officer notes are authoritative — always override local db
                 self:SetDKPForPlayer(gName, dkpVal)
                 loaded = loaded + 1
             end
@@ -803,5 +818,44 @@ function OneGuild:LoadDKPFromOfficerNotes()
     end
     if loaded > 0 then
         self:Debug("DKP aus Offiziersnotizen geladen: " .. loaded .. " Spieler")
+    end
+end
+
+------------------------------------------------------------------------
+-- Push ALL local DKP to officer notes (batch, for officers on login)
+------------------------------------------------------------------------
+function OneGuild:PushAllDKPToOfficerNotes()
+    if not IsInGuild() then return end
+    if not CanEditOfficerNote or not CanEditOfficerNote() then return end
+    if not self.db or not self.db.dkp then return end
+
+    local numGuild = GetNumGuildMembers() or 0
+    local pushed = 0
+
+    for i = 1, numGuild do
+        local gName, _, _, _, _, _, _, officerNote = GetGuildRosterInfo(i)
+        if gName then
+            local gs = strsplit("-", gName)
+            local localDKP = self.db.dkp[gs]
+            if localDKP and localDKP ~= 0 then
+                -- Check if officer note already has the correct DKP
+                local currentDKP = nil
+                if officerNote then
+                    local dkpStr = officerNote:match("DKP:(-?%d+)")
+                    if dkpStr then currentDKP = tonumber(dkpStr) end
+                end
+                -- Only write if different or missing
+                if currentDKP ~= localDKP then
+                    local newNote = "DKP:" .. tostring(localDKP)
+                    GuildRosterSetOfficerNote(i, newNote)
+                    pushed = pushed + 1
+                end
+            end
+        end
+    end
+
+    if pushed > 0 then
+        self:Debug("DKP in Offiziersnotizen geschrieben: " .. pushed .. " Spieler aktualisiert")
+        self:RequestGuildRoster()
     end
 end

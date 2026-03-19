@@ -79,6 +79,13 @@ function OneGuild:InitComm()
             OneGuild:FullSync()
         end
     end)
+
+    -- Push all local DKP to officer notes (in case they got out of sync)
+    C_Timer.After(10, function()
+        if OneGuild:IsAuthorized() and OneGuild.PushAllDKPToOfficerNotes then
+            OneGuild:PushAllDKPToOfficerNotes()
+        end
+    end)
 end
 
 ------------------------------------------------------------------------
@@ -1190,10 +1197,12 @@ end
 ------------------------------------------------------------------------
 function OneGuild:SendDKPUpdate(memberKey, dkpVal)
     self:SendCommMessage(MSG_DKP, memberKey .. "|" .. tostring(dkpVal))
-    -- Also store in officer notes if possible
+    -- Save to officer notes immediately
     if self.SaveDKPToOfficerNote then
         self:SaveDKPToOfficerNote(memberKey, dkpVal)
     end
+    -- Request roster refresh so all online members get the officer note change
+    self:RequestGuildRoster()
 end
 
 ------------------------------------------------------------------------
@@ -1256,6 +1265,9 @@ function OneGuild:ProcessDKP(sender, data)
 
     -- Use centralized setter (stores under ALL known keys)
     self:SetDKPForPlayer(memberKey, dkpVal)
+
+    -- Request fresh roster data to pick up the sender's officer note change
+    self:RequestGuildRoster()
 
     if self.RefreshMembers then self:RefreshMembers() end
 end
