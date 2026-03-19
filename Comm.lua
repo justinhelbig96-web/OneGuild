@@ -37,6 +37,7 @@ local MSG_AUCSTART = "ACS"          -- DKP auction start
 local MSG_AUCBID   = "ACB"          -- DKP auction bid
 local MSG_AUCEND   = "ACE"          -- DKP auction end (winner)
 local MSG_AUCCANCEL= "ACC"          -- DKP auction cancel
+local MSG_WLSYNC   = "WLS"          -- whitelist sync
 
 ------------------------------------------------------------------------
 -- State
@@ -108,6 +109,8 @@ function OneGuild:FullSync()
     delay = self:BroadcastAllEvents(delay)
     -- dkp
     delay = self:BroadcastAllDKP(delay)
+    -- whitelist
+    delay = self:BroadcastWhitelist(delay)
     -- tombstones (deleted raids/events)
     delay = self:BroadcastTombstones(delay)
 
@@ -391,6 +394,8 @@ function OneGuild:HandleAddonMessage(prefix, message, channel, sender)
         if self.ProcessAuctionEnd then self:ProcessAuctionEnd(sender, data) end
     elseif msgType == MSG_AUCCANCEL then
         if self.ProcessAuctionCancel then self:ProcessAuctionCancel(sender, data) end
+    elseif msgType == MSG_WLSYNC then
+        self:ProcessWhitelistSync(sender, data)
     elseif msgType == MSG_BYE      then
         if self.db and self.db.addonMembers and self.db.addonMembers[sender] then
             self.db.addonMembers[sender].online = false
@@ -1016,6 +1021,85 @@ function OneGuild:BroadcastAllDKP(startDelay)
         end)
     end
     return delay
+end
+
+------------------------------------------------------------------------
+-- BroadcastWhitelist  -- send full whitelist to guild
+------------------------------------------------------------------------
+function OneGuild:BroadcastWhitelist(startDelay)
+    local delay = startDelay or 0
+    if not self.db or not self.db.settings or not self.db.settings.whitelist then return delay end
+    local wl = self.db.settings.whitelist
+    if #wl == 0 then
+        delay = delay + 0.2
+        C_Timer.After(delay, function()
+            if not OneGuild:IsAuthorized() then return end
+            OneGuild:SendCommMessage(MSG_WLSYNC, "")
+        end)
+    else
+        delay = delay + 0.2
+        C_Timer.After(delay, function()
+            if not OneGuild:IsAuthorized() then return end
+            OneGuild:SendCommMessage(MSG_WLSYNC, table.concat(wl, ","))
+        end)
+    end
+    return delay
+end
+
+------------------------------------------------------------------------
+-- SendWhitelistSync -- send whitelist immediately (called on add/remove)
+------------------------------------------------------------------------
+function OneGuild:SendWhitelistSync()
+    if not self.db or not self.db.settings or not self.db.settings.whitelist then return end
+    local wl = self.db.settings.whitelist
+    self:SendCommMessage(MSG_WLSYNC, table.concat(wl, ","))
+end
+
+------------------------------------------------------------------------
+-- ProcessWhitelistSync -- receive whitelist from guild leader / admin
+------------------------------------------------------------------------
+function OneGuild:ProcessWhitelistSync(sender, data)
+    if not self.db or not self.db.settings then return end
+
+    -- Only accept whitelist sync from rank 0 or rank 1
+    local senderShort = strsplit("-", sender)
+    local trusted = false
+    if IsInGuild() then
+        local numGuild = GetNumGuildMembers() or 0
+        for i = 1, numGuild do
+            local gName, _, rankIdx = GetGuildRosterInfo(i)
+            if gName then
+                local gs = strsplit("-", gName)
+                if gs == senderShort or gName == sender then
+                    if rankIdx <= 1 then trusted = true end
+                    break
+                end
+            end
+        end
+    end
+    -- Also trust ourselves
+    local myName = UnitName("player") or ""
+    if senderShort == myName then trusted = true end
+
+    if not trusted then
+        self:Debug("Whitelist sync abgelehnt von: " .. sender)
+        return
+    end
+
+    -- Parse
+    local newWL = {}
+    if data and data ~= "" then
+        for name in data:gmatch("[^,]+") do
+            local trimmed = strtrim(name)
+            if trimmed ~= "" then
+                table.insert(newWL, trimmed)
+            end
+        end
+    end
+
+    self.db.settings.whitelist = newWL
+    self:LoadWhitelistFromDB()
+    self:Debug("Whitelist aktualisiert von " .. sender .. ": " .. (data or "(leer)"))
 end
 
 ------------------------------------------------------------------------

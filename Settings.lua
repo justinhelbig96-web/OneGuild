@@ -497,6 +497,7 @@ local function BuildPermissionsTab(content)
         end
         table.insert(OneGuild.db.settings.whitelist, name)
         OneGuild:LoadWhitelistFromDB()
+        if OneGuild.SendWhitelistSync then OneGuild:SendWhitelistSync() end
         addBox:SetText("")
         addBox:ClearFocus()
         RefreshWhitelistDisplay()
@@ -551,6 +552,7 @@ local function BuildPermissionsTab(content)
         end
         if found then
             OneGuild:LoadWhitelistFromDB()
+            if OneGuild.SendWhitelistSync then OneGuild:SendWhitelistSync() end
             addBox:SetText("")
             addBox:ClearFocus()
             RefreshWhitelistDisplay()
