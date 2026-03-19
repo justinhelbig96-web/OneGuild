@@ -440,7 +440,7 @@ function OneGuild:BuildRaidGroupsFrame()
             lmMenu:Hide()
             return
         end
-        -- Rebuild menu from signups across ALL raids
+        -- Rebuild menu from WoW party/raid members + raid signups
         for _, old in ipairs(f.lmMenuItems) do old:Hide() end
         wipe(f.lmMenuItems)
 
@@ -449,6 +449,35 @@ function OneGuild:BuildRaidGroupsFrame()
         -- "None" option
         table.insert(entries, { name = "", display = "|cFF888888-- keiner --|r" })
 
+        -- 1) Add all WoW group/raid members
+        if IsInRaid() then
+            local numRaid = GetNumGroupMembers() or 0
+            for i = 1, numRaid do
+                local name = GetRaidRosterInfo(i)
+                if name then
+                    local short = strsplit("-", name)
+                    if not seen[short] then
+                        seen[short] = true
+                        table.insert(entries, { name = short, display = "|cFFFFD700" .. short .. "|r" })
+                    end
+                end
+            end
+        elseif IsInGroup() then
+            -- Party (non-raid)
+            local numGroup = GetNumGroupMembers() or 0
+            for i = 1, numGroup do
+                local unit = (i == numGroup) and "player" or ("party" .. i)
+                local name = UnitName(unit)
+                if name then
+                    if not seen[name] then
+                        seen[name] = true
+                        table.insert(entries, { name = name, display = "|cFFFFD700" .. name .. "|r" })
+                    end
+                end
+            end
+        end
+
+        -- 2) Also add raid signups (in case they're not in the WoW group yet)
         if OneGuild.db and OneGuild.db.raids then
             for _, rd in ipairs(OneGuild.db.raids) do
                 if rd.signups then
