@@ -1221,30 +1221,43 @@ function OneGuild:ProcessDKP(sender, data)
     -- Only accept DKP from trusted senders
     local senderShort = strsplit("-", sender)
     local isAdmin = false
+    local trustReason = "none"
 
     -- 1) Accept from self always
     local myName = UnitName("player") or ""
-    if sender == myName or senderShort == myName then isAdmin = true end
+    if sender == myName or senderShort == myName then
+        isAdmin = true
+        trustReason = "self"
+    end
 
     -- 2) Check dynamic whitelist
     if not isAdmin and self:IsOnWhitelist(senderShort) then
         isAdmin = true
+        trustReason = "whitelist"
     end
 
     -- 3) Check guild roster: guild leader (rank 0) or officers (rank 1)
     if not isAdmin and IsInGuild() then
         local numGuild = GetNumGuildMembers() or 0
+        local foundInRoster = false
         for i = 1, numGuild do
             local gName, _, rankIdx = GetGuildRosterInfo(i)
             if gName then
                 local gs = strsplit("-", gName)
                 if gs == senderShort or gName == sender then
+                    foundInRoster = true
                     if rankIdx and rankIdx <= 1 then
                         isAdmin = true
+                        trustReason = "rank" .. tostring(rankIdx)
+                    else
+                        trustReason = "rank" .. tostring(rankIdx) .. "-denied"
                     end
                     break
                 end
             end
+        end
+        if not foundInRoster and not isAdmin then
+            trustReason = "not-in-roster(" .. numGuild .. ")"
         end
     end
 
@@ -1256,14 +1269,21 @@ function OneGuild:ProcessDKP(sender, data)
             if name then
                 local ns = strsplit("-", name)
                 if ns == senderShort or name == sender then
-                    if rank and rank >= 1 then isAdmin = true end
+                    if rank and rank >= 1 then
+                        isAdmin = true
+                        trustReason = "raid-rank" .. tostring(rank)
+                    end
                     break
                 end
             end
         end
     end
 
-    if not isAdmin then return end  -- ignore DKP from non-admins
+    if not isAdmin then
+        -- DIAGNOSTIC: show why DKP was rejected
+        self:Print("|cFFFF4444[DKP ABGELEHNT] von " .. sender .. " (" .. senderShort .. ") Grund: " .. trustReason .. "|r")
+        return
+    end
 
     -- Parse: memberKey|dkpVal or memberKey|dkpVal|timestamp
     local memberKey, dkpStr, tsStr = strsplit("|", data)
