@@ -1040,7 +1040,11 @@ function OneGuild:BroadcastGlobalGroups()
     local parts = {}
     for g = 1, 8 do
         local members = groups[g] or {}
-        parts[g] = table.concat(members, ",")
+        local slots = {}
+        for s = 1, 5 do
+            slots[s] = members[s] or "_"
+        end
+        parts[g] = table.concat(slots, ",")
     end
     self:SendCommMessage(MSG_GGROUP, table.concat(parts, ";"))
 end
@@ -1055,7 +1059,16 @@ function OneGuild:ProcessGlobalGroups(sender, data)
         if gStr == "" then
             self.db.raidGroups[g] = {}
         else
-            self.db.raidGroups[g] = { strsplit(",", gStr) }
+            local names = { strsplit(",", gStr) }
+            self.db.raidGroups[g] = {}
+            for s = 1, 5 do
+                local n = names[s]
+                if n and n ~= "_" and n ~= "" then
+                    self.db.raidGroups[g][s] = n
+                else
+                    self.db.raidGroups[g][s] = nil
+                end
+            end
         end
     end
 

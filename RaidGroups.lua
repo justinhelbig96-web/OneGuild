@@ -215,26 +215,67 @@ end
 ------------------------------------------------------------------------
 -- Move player to group (addon-managed)
 ------------------------------------------------------------------------
-MoveToGroup = function(playerName, targetGroup)
+MoveToGroup = function(playerName, targetGroup, targetSlot)
     if not OneGuild.db then return end
     if not OneGuild.db.raidGroups then OneGuild.db.raidGroups = {} end
     local rg = OneGuild.db.raidGroups
 
-    -- Remove from any existing group first
+    -- Remove from any existing group/slot first
     for g = 1, MAX_GROUPS do
         if rg[g] then
-            for i = #rg[g], 1, -1 do
-                if rg[g][i] == playerName then
-                    table.remove(rg[g], i)
+            for s = 1, MAX_PER_GROUP do
+                if rg[g][s] == playerName then
+                    rg[g][s] = nil
                 end
             end
         end
     end
 
-    -- Add to target group (max 5)
+    -- Ensure target group table exists
     if not rg[targetGroup] then rg[targetGroup] = {} end
-    if #rg[targetGroup] < MAX_PER_GROUP then
-        table.insert(rg[targetGroup], playerName)
+
+    -- If a specific slot was given and it's free, use it
+    if targetSlot and targetSlot >= 1 and targetSlot <= MAX_PER_GROUP then
+        if not rg[targetGroup][targetSlot] then
+            rg[targetGroup][targetSlot] = playerName
+        else
+            -- Slot occupied: find first free slot
+            local placed = false
+            for s = 1, MAX_PER_GROUP do
+                if not rg[targetGroup][s] then
+                    rg[targetGroup][s] = playerName
+                    placed = true
+                    break
+                end
+            end
+            if not placed then return end  -- group full
+        end
+    else
+        -- No slot given: find first free slot
+        local placed = false
+        for s = 1, MAX_PER_GROUP do
+            if not rg[targetGroup][s] then
+                rg[targetGroup][s] = playerName
+                placed = true
+                break
+            end
+        end
+        if not placed then return end  -- group full
+    end
+
+    -- Move in actual WoW raid via SetRaidSubgroup
+    if IsInRaid() and (UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")) then
+        local short = strsplit("-", playerName)
+        for i = 1, MAX_RAID_MEMBERS do
+            local name = GetRaidRosterInfo(i)
+            if name then
+                local nameShort = strsplit("-", name)
+                if nameShort == short or name == playerName then
+                    SetRaidSubgroup(i, targetGroup)
+                    break
+                end
+            end
+        end
     end
 
     -- Broadcast to guild
@@ -252,9 +293,9 @@ RemoveFromGroup = function(playerName)
 
     for g = 1, MAX_GROUPS do
         if rg[g] then
-            for i = #rg[g], 1, -1 do
-                if rg[g][i] == playerName then
-                    table.remove(rg[g], i)
+            for s = 1, MAX_PER_GROUP do
+                if rg[g][s] == playerName then
+                    rg[g][s] = nil
                 end
             end
         end
@@ -508,10 +549,11 @@ function OneGuild:BuildRaidGroupsFrame()
                 StopDrag()
             end)
 
-            -- Drop on cell = move to this group
+            -- Drop on cell = move to this group at this slot
+            cell.slotIndex = s
             cell:SetScript("OnMouseUp", function(self, btn)
                 if btn == "LeftButton" and dragPlayerName then
-                    MoveToGroup(dragPlayerName, g)
+                    MoveToGroup(dragPlayerName, g, self.slotIndex)
                     StopDrag()
                 end
             end)
@@ -696,7 +738,9 @@ function OneGuild:RefreshRaidGroups()
     for g = 1, MAX_GROUPS do
         local panel = groupPanels[g]
         local members = raidGroups[g] or {}
-        panel.header:SetText("|cFFFFB800Gruppe " .. g .. "|r |cFF8B7355(" .. #members .. ")|r")
+        local memberCount = 0
+        for s = 1, MAX_PER_GROUP do if members[s] then memberCount = memberCount + 1 end end
+        panel.header:SetText("|cFFFFB800Gruppe " .. g .. "|r |cFF8B7355(" .. memberCount .. ")|r")
 
         for s = 1, MAX_PER_GROUP do
             local cell  = panel.cells[s]
