@@ -18,117 +18,7 @@ OneGuild.REQUIRED_GUILD = "One"
 ------------------------------------------------------------------------
 -- Version & Constants
 ------------------------------------------------------------------------
-OneGuild.VERSION = "1.0.9"
-
-------------------------------------------------------------------------
--- Safe Officer Note Writer (compat for different WoW API versions)
-------------------------------------------------------------------------
-local function SafeSetOfficerNote(index, note)
-    -- Try classic global function first
-    if GuildRosterSetOfficerNote then
-        GuildRosterSetOfficerNote(index, note)
-        return true
-    end
-    -- Retail: C_GuildInfo.SetNote(guid, note, isPublic)
-    if C_GuildInfo and C_GuildInfo.SetNote then
-        local fullName, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(index)
-        if guid then
-            C_GuildInfo.SetNote(guid, note, false)
-            return true
-        end
-        return false
-    end
-    return false
-end
-OneGuild.SafeSetOfficerNote = SafeSetOfficerNote
-
--- Debug slash command: lists all C_GuildInfo functions
-SLASH_OGAPI1 = "/ogapi"
-SlashCmdList["OGAPI"] = function()
-    print("|cFFFFB800[OneGuild] C_GuildInfo Funktionen:|r")
-    if C_GuildInfo then
-        for k, v in pairs(C_GuildInfo) do
-            print("  |cFF66FF66" .. k .. "|r = " .. type(v))
-        end
-    else
-        print("|cFFFF4444C_GuildInfo existiert nicht!|r")
-    end
-    print("|cFFFFB800[OneGuild] Globale Guild-Funktionen:|r")
-    local globals = {"GuildRosterSetOfficerNote", "GuildRosterSetPublicNote", "SetGuildRosterOfficerNote"}
-    for _, name in ipairs(globals) do
-        local fn = _G[name]
-        print("  |cFF66FF66" .. name .. "|r = " .. tostring(fn))
-    end
-end
-
--- Minimal isolated test: /ogtest  (tests Club API officer note writing)
-SLASH_OGTEST1 = "/ogtest"
-SlashCmdList["OGTEST"] = function()
-    local myName = UnitName("player")
-    
-    if not C_Club then
-        print("|cFFFF4444[OG-Test] C_Club nicht vorhanden!|r")
-        return
-    end
-    
-    local clubId = C_Club.GetGuildClubId and C_Club.GetGuildClubId()
-    if not clubId then
-        print("|cFFFF4444[OG-Test] Keine GuildClubId!|r")
-        return
-    end
-    
-    local members = C_Club.GetClubMembers(clubId)
-    if not members then
-        print("|cFFFF4444[OG-Test] Keine Mitglieder!|r")
-        return
-    end
-    
-    -- Find me
-    local myMemberId, myInfo
-    for _, memberId in ipairs(members) do
-        local info = C_Club.GetMemberInfo(clubId, memberId)
-        if info and info.name and info.name:find(myName) then
-            myMemberId = memberId
-            myInfo = info
-            break
-        end
-    end
-    
-    if not myMemberId then
-        print("|cFFFF4444[OG-Test] Nicht gefunden in Club!|r")
-        return
-    end
-    
-    print("|cFFFFB800[OG-Test] ClubId=" .. clubId .. " MemberId=" .. myMemberId .. "|r")
-    print("|cFF00FFFF  VORHER: memberNote='" .. tostring(myInfo.memberNote) .. "' officerNote='" .. tostring(myInfo.officerNote) .. "'|r")
-    
-    -- Test A: SetClubMemberNote with 3 args (public note)
-    print("|cFFFFAA00[OG-Test] A: SetClubMemberNote(clubId, memberId, 'NOTE-A')|r")
-    pcall(C_Club.SetClubMemberNote, clubId, myMemberId, "NOTE-A")
-    
-    -- Re-read after A
-    local infoA = C_Club.GetMemberInfo(clubId, myMemberId)
-    print("|cFF00FFFF  NACH A: memberNote='" .. tostring(infoA and infoA.memberNote) .. "' officerNote='" .. tostring(infoA and infoA.officerNote) .. "'|r")
-    
-    -- Test B: SetClubMemberNote with 4th arg = true
-    print("|cFFFFAA00[OG-Test] B: SetClubMemberNote(clubId, memberId, 'NOTE-B', true)|r")
-    local okB, errB = pcall(C_Club.SetClubMemberNote, clubId, myMemberId, "NOTE-B", true)
-    print("|cFF00FFFF  Result: ok=" .. tostring(okB) .. " err=" .. tostring(errB) .. "|r")
-    
-    -- Re-read after B
-    local infoB = C_Club.GetMemberInfo(clubId, myMemberId)
-    print("|cFF00FFFF  NACH B: memberNote='" .. tostring(infoB and infoB.memberNote) .. "' officerNote='" .. tostring(infoB and infoB.officerNote) .. "'|r")
-    
-    -- List ALL C_Club functions (for finding officer note func)
-    print("|cFFFFAA00[OG-Test] Alle C_Club Funktionen mit 'Officer' oder 'Note':|r")
-    for k, v in pairs(C_Club) do
-        if k:lower():find("officer") or k:lower():find("note") then
-            print("|cFF00FFFF  " .. k .. " = " .. type(v) .. "|r")
-        end
-    end
-    
-    print("|cFFFFB800[OG-Test] Pruefe Gildenfenster!|r")
-end
+OneGuild.VERSION = "1.1.0"
 
 ------------------------------------------------------------------------
 -- Admin Whitelist  –  now loaded from SavedVariables (db.settings.whitelist)
@@ -519,14 +409,27 @@ function OneGuild:GetDKPForPlayer(nameOrKey)
     return self.db.dkp[short] or 0
 end
 
-function OneGuild:SetDKPForPlayer(nameOrKey, val)
+function OneGuild:SetDKPForPlayer(nameOrKey, val, timestamp)
     if not self.db then return end
     if not self.db.dkp then self.db.dkp = {} end
+    if not self.db.dkpTimestamps then self.db.dkpTimestamps = {} end
     local allKeys = self:GetAllDKPKeys(nameOrKey)
+    local ts = timestamp or time()
     -- Store under ALL known keys so any lookup path finds the same value
     for _, k in ipairs(allKeys) do
         self.db.dkp[k] = val
+        self.db.dkpTimestamps[k] = ts
     end
+end
+
+------------------------------------------------------------------------
+-- Get the timestamp for a player's DKP entry (0 = unknown/never set)
+------------------------------------------------------------------------
+function OneGuild:GetDKPTimestamp(nameOrKey)
+    if not self.db or not self.db.dkpTimestamps then return 0 end
+    local short = self:NormalizeDKPKey(nameOrKey)
+    if not short then return 0 end
+    return self.db.dkpTimestamps[short] or 0
 end
 
 ------------------------------------------------------------------------
@@ -644,45 +547,12 @@ SlashCmdList["ONEGUILD"] = function(msg)
         else
             OneGuild:Print(OneGuild.COLORS.MUTED .. "Kein MOTD gesetzt.|r")
         end
-    elseif msg == "dkptest" then
-        -- Diagnostic: test officer note writing
-        OneGuild:Print("|cFFFFD700=== DKP Officer Note Test ===")
-        OneGuild:Print("InGuild: " .. tostring(IsInGuild()))
-        local canEdit = CanEditOfficerNote and CanEditOfficerNote()
-        OneGuild:Print("CanEditOfficerNote(): " .. tostring(canEdit))
-        if C_GuildInfo and C_GuildInfo.CanEditOfficerNote then
-            OneGuild:Print("C_GuildInfo.CanEditOfficerNote(): " .. tostring(C_GuildInfo.CanEditOfficerNote()))
-        else
-            OneGuild:Print("C_GuildInfo.CanEditOfficerNote: nicht vorhanden")
-        end
-        OneGuild:Print("CanWriteOfficerNotes(): " .. tostring(OneGuild:CanWriteOfficerNotes()))
-        local numGuild = GetNumGuildMembers() or 0
-        OneGuild:Print("Gildenmitglieder geladen: " .. numGuild)
-        local myName = UnitName("player") or "?"
-        local myDKP = OneGuild:GetDKPForPlayer(myName)
-        OneGuild:Print("Mein DKP (" .. myName .. "): " .. tostring(myDKP))
-        -- Show first 3 members with their officer notes
-        for i = 1, math.min(3, numGuild) do
-            local gName, _, rankIdx, _, _, _, _, officerNote = GetGuildRosterInfo(i)
-            if gName then
-                local gs = strsplit("-", gName)
-                OneGuild:Print("  " .. gs .. " (Rang " .. tostring(rankIdx) .. ") Note: '" .. tostring(officerNote) .. "'")
-            end
-        end
-        -- Try writing own officer note as test
-        OneGuild:Print("Versuche Testschreibung...")
-        local result = OneGuild:SaveDKPToOfficerNote(myName, myDKP ~= 0 and myDKP or 100)
-        if result then
-            OneGuild:Print("|cFF66FF66Erfolgreich geschrieben!|r Pruefe die Offiziersnotiz.")
-        else
-            OneGuild:Print("|cFFFF4444Schreiben fehlgeschlagen!|r Siehe Fehlermeldung oben.")
-        end
-    elseif msg == "dkppush" then
-        -- Force push all DKP to officer notes (direct from slash = hardware event)
-        OneGuild:Print("|cFFFFD700Erzwinge DKP-Push in Offiziersnotizen...|r")
-        OneGuild:RequestGuildRoster()
-        -- Small delay to let roster load, but use After only for roster, then push directly
-        OneGuild:PushAllDKPToOfficerNotes()
+    elseif msg == "dkptest" or msg == "dkppush" then
+        -- Legacy: officer note writing no longer works in Midnight.
+        -- DKP is now synced entirely via addon comm messages.
+        OneGuild:Print("|cFFFFD700DKP wird jetzt ueber Addon-Kommunikation synchronisiert.|r")
+        OneGuild:Print("Offiziersnotizen koennen in Midnight nicht mehr geschrieben werden.")
+        OneGuild:Print("Nutze den |cFF66FF66Sync|r Button oder /reload um DKP zu synchronisieren.")
     elseif msg == "help" then
         OneGuild:Print("Befehle:")
         OneGuild:Print("  /og         - Hauptfenster öffnen/schließen")
@@ -698,8 +568,6 @@ SlashCmdList["ONEGUILD"] = function(msg)
         OneGuild:Print("  /og groups   - Raid-Gruppen öffnen")
         OneGuild:Print("  /og lootcheck - Addon-Check starten")
         OneGuild:Print("  /og settings - Einstellungen öffnen")
-        OneGuild:Print("  /og dkptest  - DKP Offiziersnotiz Test")
-        OneGuild:Print("  /og dkppush  - DKP in Offiziersnotizen schreiben")
         OneGuild:Print("  /og debug delete - Alle Daten zurücksetzen (Test)")
         OneGuild:Print("  /og help     - Diese Hilfe")
     else
@@ -923,67 +791,17 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
 end)
 
 ------------------------------------------------------------------------
--- Officer Note DKP Storage
--- Format in officer note: "DKP:123"
+-- Officer Note DKP Storage (READ-ONLY)
+-- Writing officer notes no longer works in WoW Midnight.
+-- DKP is synced entirely via addon comm messages with timestamps.
+-- LoadDKPFromOfficerNotes is kept as a one-time import for legacy data.
 ------------------------------------------------------------------------
-function OneGuild:CanWriteOfficerNotes()
-    -- Try multiple APIs (Retail compatibility)
-    if CanEditOfficerNote then
-        local ok = CanEditOfficerNote()
-        if ok then return true end
-    end
-    if C_GuildInfo and C_GuildInfo.CanEditOfficerNote then
-        local ok = C_GuildInfo.CanEditOfficerNote()
-        if ok then return true end
-    end
-    -- Fallback: check guild rank flags
-    if GuildControlGetRankFlags then
-        local flags = {GuildControlGetRankFlags()}
-        -- Flag 12 = Edit Officer Note (0-indexed)
-        if flags[13] then return true end
-    end
-    return false
-end
-
-function OneGuild:SaveDKPToOfficerNote(memberKey, dkpVal)
-    if not IsInGuild() then
-        self:Print("|cFFFF4444[DKP] Nicht in Gilde!|r")
-        return false
-    end
-    if not self:CanWriteOfficerNotes() then
-        self:Print("|cFFFF4444[DKP] Keine Berechtigung fuer Offiziersnotizen! Rang hat kein 'Offiziersnotiz bearbeiten' Recht.|r")
-        return false
-    end
-
-    local shortName = strsplit("-", memberKey)
-    local numGuild = GetNumGuildMembers() or 0
-    if numGuild == 0 then
-        self:Print("|cFFFF4444[DKP] Gildenliste nicht geladen (0 Mitglieder). Versuche /reload.|r")
-        return false
-    end
-
-    for i = 1, numGuild do
-        local gName, _, _, _, _, _, _, officerNote = GetGuildRosterInfo(i)
-        if gName then
-            local gs = strsplit("-", gName)
-            if gs == shortName or gName == memberKey then
-                local newNote = "DKP:" .. tostring(dkpVal)
-                SafeSetOfficerNote(i, newNote)
-                self:Debug("DKP in Offiziersnotiz gespeichert: " .. gs .. " = " .. tostring(dkpVal))
-                -- Force roster refresh so other online members get the update
-                self:RequestGuildRoster()
-                return true
-            end
-        end
-    end
-    self:Debug("[DKP] Spieler nicht in Gildenliste gefunden: " .. memberKey)
-    return false
-end
 
 function OneGuild:LoadDKPFromOfficerNotes()
     if not IsInGuild() then return end
     if not self.db then return end
     if not self.db.dkp then self.db.dkp = {} end
+    if not self.db.dkpTimestamps then self.db.dkpTimestamps = {} end
 
     local numGuild = GetNumGuildMembers() or 0
     local loaded = 0
@@ -993,57 +811,20 @@ function OneGuild:LoadDKPFromOfficerNotes()
             local dkpStr = officerNote:match("DKP:(-?%d+)")
             if dkpStr then
                 local dkpVal = tonumber(dkpStr) or 0
-                -- Officer notes are authoritative — always override local db
-                self:SetDKPForPlayer(gName, dkpVal)
-                loaded = loaded + 1
+                local short = strsplit("-", gName)
+                local localTs = self:GetDKPTimestamp(short)
+                -- Only import from officer notes if we have NO comm-based data
+                -- (comm data with timestamps is always more authoritative)
+                if localTs == 0 then
+                    self:SetDKPForPlayer(gName, dkpVal, 1) -- timestamp=1 = "from officer notes, very old"
+                    loaded = loaded + 1
+                end
             end
         end
     end
     if loaded > 0 then
-        self:Debug("DKP aus Offiziersnotizen geladen: " .. loaded .. " Spieler")
+        self:Debug("DKP aus Offiziersnotizen importiert (nur fehlende): " .. loaded .. " Spieler")
     end
 end
 
-------------------------------------------------------------------------
--- Push ALL local DKP to officer notes (batch, for officers on login)
-------------------------------------------------------------------------
-function OneGuild:PushAllDKPToOfficerNotes()
-    if not IsInGuild() then return end
-    if not self:CanWriteOfficerNotes() then
-        self:Debug("PushAllDKP: Keine Berechtigung fuer Offiziersnotizen")
-        return
-    end
-    if not self.db or not self.db.dkp then return end
 
-    local numGuild = GetNumGuildMembers() or 0
-    if numGuild == 0 then return end
-
-    local pushed = 0
-
-    for i = 1, numGuild do
-        local gName, _, _, _, _, _, _, officerNote = GetGuildRosterInfo(i)
-        if gName then
-            local gs = strsplit("-", gName)
-            local localDKP = self.db.dkp[gs]
-            if localDKP and localDKP ~= 0 then
-                -- Check if officer note already has the correct DKP
-                local currentDKP = nil
-                if officerNote then
-                    local dkpStr = officerNote:match("DKP:(-?%d+)")
-                    if dkpStr then currentDKP = tonumber(dkpStr) end
-                end
-                -- Only write if different or missing
-                if currentDKP ~= localDKP then
-                    local newNote = "DKP:" .. tostring(localDKP)
-                    SafeSetOfficerNote(i, newNote)
-                    pushed = pushed + 1
-                end
-            end
-        end
-    end
-
-    if pushed > 0 then
-        self:PrintSuccess("DKP in Offiziersnotizen aktualisiert: " .. pushed .. " Spieler")
-        self:RequestGuildRoster()
-    end
-end

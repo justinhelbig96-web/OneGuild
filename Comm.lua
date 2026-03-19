@@ -80,9 +80,8 @@ function OneGuild:InitComm()
         end
     end)
 
-    -- Push all local DKP to officer notes (in case they got out of sync)
-    -- NOTE: Auto-push removed - SetNote requires hardware event context in TWW.
-    -- DKP push now happens via Sync button click or /og dkppush.
+    -- Request fresh roster data, then import any legacy officer note DKP
+    -- (only imports for players that have NO comm-based DKP yet)
     C_Timer.After(8, function()
         if OneGuild:IsAuthorized() then
             OneGuild:RequestGuildRoster()
@@ -1112,9 +1111,10 @@ function OneGuild:BroadcastAllDKP(startDelay)
 
     for memberKey, dkpVal in pairs(self.db.dkp) do
         delay = delay + 0.3
+        local ts = (self.db.dkpTimestamps and self.db.dkpTimestamps[memberKey]) or 0
         C_Timer.After(delay, function()
             if not OneGuild:IsAuthorized() then return end
-            OneGuild:SendCommMessage(MSG_DKP, memberKey .. "|" .. tostring(dkpVal))
+            OneGuild:SendCommMessage(MSG_DKP, memberKey .. "|" .. tostring(dkpVal) .. "|" .. tostring(ts))
         end)
     end
     return delay
@@ -1203,11 +1203,12 @@ end
 -- SendDKPUpdate  -- send a single DKP update immediately
 ------------------------------------------------------------------------
 function OneGuild:SendDKPUpdate(memberKey, dkpVal)
-    self:SendCommMessage(MSG_DKP, memberKey .. "|" .. tostring(dkpVal))
-    -- Queue officer note write for next Sync click (SetNote needs hardware event)
-    if not self._pendingDKPNotes then self._pendingDKPNotes = {} end
-    self._pendingDKPNotes[memberKey] = dkpVal
-    self:Debug("DKP queued for officer note: " .. memberKey .. " = " .. tostring(dkpVal))
+    local ts = time()
+    -- Store locally with timestamp
+    self:SetDKPForPlayer(memberKey, dkpVal, ts)
+    -- Broadcast with timestamp so receivers know which data is freshest
+    self:SendCommMessage(MSG_DKP, memberKey .. "|" .. tostring(dkpVal) .. "|" .. tostring(ts))
+    self:Debug("DKP gesendet: " .. memberKey .. " = " .. tostring(dkpVal) .. " (ts=" .. ts .. ")")
     -- Request roster refresh so all online members get the comm update
     self:RequestGuildRoster()
 end
@@ -1266,15 +1267,22 @@ function OneGuild:ProcessDKP(sender, data)
 
     if not isAdmin then return end  -- ignore DKP from non-admins
 
-    local memberKey, dkpStr = strsplit("|", data)
+    -- Parse: memberKey|dkpVal or memberKey|dkpVal|timestamp
+    local memberKey, dkpStr, tsStr = strsplit("|", data)
     if not memberKey then return end
     local dkpVal = tonumber(dkpStr) or 0
+    local incomingTs = tonumber(tsStr) or 0
 
-    -- Use centralized setter (stores under ALL known keys)
-    self:SetDKPForPlayer(memberKey, dkpVal)
+    -- Compare timestamps: only accept if incoming is newer (or no local ts)
+    local localTs = self:GetDKPTimestamp(memberKey)
+    if incomingTs > 0 and localTs > 0 and incomingTs < localTs then
+        -- Our local data is newer — skip this update
+        self:Debug("DKP skip (stale): " .. memberKey .. " incoming=" .. incomingTs .. " local=" .. localTs)
+        return
+    end
 
-    -- Request fresh roster data to pick up the sender's officer note change
-    self:RequestGuildRoster()
+    -- Use centralized setter (stores under ALL known keys + timestamp)
+    self:SetDKPForPlayer(memberKey, dkpVal, incomingTs > 0 and incomingTs or nil)
 
     if self.RefreshMembers then self:RefreshMembers() end
 end
