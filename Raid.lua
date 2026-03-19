@@ -1612,6 +1612,25 @@ function OneGuild:ShowDKPDistribution()
     closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
     closeBtn:SetScript("OnClick", function() f:Hide() end)
 
+    -- Historie button in title bar
+    local histBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
+    histBtn:SetSize(80, 22)
+    histBtn:SetPoint("RIGHT", closeBtn, "LEFT", -4, 0)
+    histBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 6,
+        insets   = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    histBtn:SetBackdropColor(0.12, 0.08, 0.25, 0.9)
+    histBtn:SetBackdropBorderColor(0.4, 0.3, 0.6, 0.6)
+    local histBtnText = histBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    histBtnText:SetPoint("CENTER")
+    histBtnText:SetText("|cFF9999FFHistorie|r")
+    histBtn:SetScript("OnClick", function() OneGuild:ShowDKPHistory() end)
+    histBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(0.2, 0.14, 0.4, 1) end)
+    histBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(0.12, 0.08, 0.25, 0.9) end)
+
     -- ===== BONUS TYPE DROPDOWN =====
     local bonusLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     bonusLabel:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -38)
@@ -2090,6 +2109,15 @@ function OneGuild:ApplyDKPToSelected(amount)
             local diffColor = amount >= 0 and "|cFF66FF66+" or "|cFFFF6666"
             row.newDkpText:SetText(diffColor .. tostring(amount) .. "|r")
 
+            -- Record history
+            if self.AddDKPHistory then
+                local bonusLabel = bonusType
+                for _, bt in ipairs(DKP_BONUS_TYPES) do
+                    if bt.value == bonusType then bonusLabel = bt.label; break end
+                end
+                self:AddDKPHistory(pName, amount, newVal, bonusLabel, UnitName("player") or "?")
+            end
+
             applied = applied + 1
         end
     end
@@ -2105,4 +2133,215 @@ function OneGuild:ApplyDKPToSelected(amount)
 
     -- Refresh members tab
     if self.RefreshMembers then self:RefreshMembers() end
+end
+
+------------------------------------------------------------------------
+-- DKP HISTORY WINDOW
+------------------------------------------------------------------------
+local dkpHistFrame = nil
+
+function OneGuild:ShowDKPHistory()
+    if dkpHistFrame then
+        dkpHistFrame:Show()
+        self:RefreshDKPHistory()
+        return
+    end
+
+    local FRAME_W = 580
+    local FRAME_H = 460
+    local ROW_H   = 20
+
+    local f = CreateFrame("Frame", "OneGuildDKPHistFrame", UIParent, "BackdropTemplate")
+    f:SetSize(FRAME_W, FRAME_H)
+    f:SetPoint("CENTER", UIParent, "CENTER", 200, 0)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:SetClampedToScreen(true)
+    f:SetFrameStrata("DIALOG")
+    f:SetFrameLevel(210)
+    f:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 14,
+        insets   = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    f:SetBackdropColor(0.05, 0.03, 0.06, 0.97)
+    f:SetBackdropBorderColor(0.4, 0.3, 0.6, 0.8)
+
+    -- Title bar
+    local tb = CreateFrame("Frame", nil, f)
+    tb:SetHeight(32)
+    tb:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+    tb:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
+    tb:EnableMouse(true)
+    tb:RegisterForDrag("LeftButton")
+    tb:SetScript("OnDragStart", function() f:StartMoving() end)
+    tb:SetScript("OnDragStop", function() f:StopMovingOrSizing() end)
+
+    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -8)
+    title:SetText("|cFF9999FFDKP Historie|r")
+
+    local closeBtn = CreateFrame("Button", nil, tb, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
+    closeBtn:SetScript("OnClick", function() f:Hide() end)
+
+    -- Column headers
+    local headerBar = CreateFrame("Frame", nil, f)
+    headerBar:SetHeight(20)
+    headerBar:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -34)
+    headerBar:SetPoint("TOPRIGHT", f, "TOPRIGHT", -12, -34)
+
+    local hTime = headerBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hTime:SetPoint("LEFT", headerBar, "LEFT", 0, 0)
+    hTime:SetText("|cFFDDB866Datum/Zeit|r")
+    local hPlayer = headerBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hPlayer:SetPoint("LEFT", headerBar, "LEFT", 110, 0)
+    hPlayer:SetText("|cFFDDB866Spieler|r")
+    local hAmount = headerBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hAmount:SetPoint("LEFT", headerBar, "LEFT", 220, 0)
+    hAmount:SetText("|cFFDDB866Betrag|r")
+    local hTotal = headerBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hTotal:SetPoint("LEFT", headerBar, "LEFT", 290, 0)
+    hTotal:SetText("|cFFDDB866Gesamt|r")
+    local hType = headerBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hType:SetPoint("LEFT", headerBar, "LEFT", 360, 0)
+    hType:SetText("|cFFDDB866Typ|r")
+    local hSource = headerBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hSource:SetPoint("LEFT", headerBar, "LEFT", 480, 0)
+    hSource:SetText("|cFFDDB866Von|r")
+
+    -- Scrollable list
+    local listArea = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    listArea:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -56)
+    listArea:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 10)
+    listArea:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    listArea:SetBackdropColor(0.04, 0.02, 0.04, 0.8)
+    listArea:SetBackdropBorderColor(0.3, 0.2, 0.4, 0.4)
+    f.listArea = listArea
+
+    local scrollContent = CreateFrame("Frame", nil, listArea)
+    scrollContent:SetPoint("TOPLEFT", listArea, "TOPLEFT", 4, -4)
+    scrollContent:SetPoint("BOTTOMRIGHT", listArea, "BOTTOMRIGHT", -4, 4)
+    f.scrollContent = scrollContent
+    f.histRows = {}
+    f.scrollOffset = 0
+
+    listArea:EnableMouseWheel(true)
+    listArea:SetScript("OnMouseWheel", function(_, delta)
+        local total = f.totalEntries or 0
+        local visible = math.floor((scrollContent:GetHeight() or 300) / ROW_H)
+        local maxOff = math.max(0, total - visible)
+        f.scrollOffset = math.max(0, math.min(f.scrollOffset - delta * 3, maxOff))
+        OneGuild:RefreshDKPHistory()
+    end)
+
+    dkpHistFrame = f
+    self:RefreshDKPHistory()
+end
+
+------------------------------------------------------------------------
+-- Refresh DKP History
+------------------------------------------------------------------------
+function OneGuild:RefreshDKPHistory()
+    if not dkpHistFrame then return end
+    local f = dkpHistFrame
+    local ROW_H = 20
+    local scroll = f.scrollContent
+
+    local history = (self.db and self.db.dkpHistory) or {}
+
+    -- Show newest first (reverse)
+    local sorted = {}
+    for i = #history, 1, -1 do
+        table.insert(sorted, history[i])
+    end
+
+    f.totalEntries = #sorted
+    local visible = math.floor((scroll:GetHeight() or 300) / ROW_H)
+
+    for i = 1, math.max(visible + 1, #f.histRows) do
+        local dataIdx = i + (f.scrollOffset or 0)
+        local entry = sorted[dataIdx]
+        local row = f.histRows[i]
+
+        if not row then
+            row = CreateFrame("Frame", nil, scroll, "BackdropTemplate")
+            row:SetHeight(ROW_H)
+            row:SetPoint("TOPLEFT", scroll, "TOPLEFT", 0, -((i - 1) * ROW_H))
+            row:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, -((i - 1) * ROW_H))
+            row:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+
+            row.timeText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.timeText:SetPoint("LEFT", row, "LEFT", 2, 0)
+            row.timeText:SetWidth(108)
+            row.timeText:SetJustifyH("LEFT")
+
+            row.playerText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.playerText:SetPoint("LEFT", row, "LEFT", 110, 0)
+            row.playerText:SetWidth(105)
+            row.playerText:SetJustifyH("LEFT")
+
+            row.amountText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.amountText:SetPoint("LEFT", row, "LEFT", 218, 0)
+            row.amountText:SetWidth(65)
+
+            row.totalText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.totalText:SetPoint("LEFT", row, "LEFT", 288, 0)
+            row.totalText:SetWidth(65)
+
+            row.typeText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.typeText:SetPoint("LEFT", row, "LEFT", 358, 0)
+            row.typeText:SetWidth(118)
+            row.typeText:SetJustifyH("LEFT")
+
+            row.sourceText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            row.sourceText:SetPoint("LEFT", row, "LEFT", 478, 0)
+            row.sourceText:SetWidth(75)
+            row.sourceText:SetJustifyH("LEFT")
+
+            f.histRows[i] = row
+        end
+
+        if entry then
+            row:Show()
+            -- Timestamp
+            local ts = entry.timestamp or 0
+            row.timeText:SetText("|cFF888888" .. date("%d.%m %H:%M", ts) .. "|r")
+
+            -- Player name (short)
+            local short = strsplit("-", entry.player or "?")
+            row.playerText:SetText(short)
+
+            -- Amount with color
+            local amt = entry.amount or 0
+            local prefix = amt >= 0 and "+" or ""
+            local amtColor = amt >= 0 and "|cFF66FF66" or "|cFFFF6666"
+            row.amountText:SetText(amtColor .. prefix .. tostring(amt) .. "|r")
+
+            -- New total
+            row.totalText:SetText("|cFFFFD700" .. tostring(entry.newTotal or 0) .. "|r")
+
+            -- Bonus type
+            row.typeText:SetText("|cFF8B7355" .. (entry.bonusType or "?") .. "|r")
+
+            -- Source
+            local srcShort = strsplit("-", entry.source or "?")
+            row.sourceText:SetText("|cFF8888AA" .. srcShort .. "|r")
+
+            -- Alternating rows
+            if dataIdx % 2 == 0 then
+                row:SetBackdropColor(0.06, 0.03, 0.06, 0.5)
+            else
+                row:SetBackdropColor(0.04, 0.02, 0.04, 0.3)
+            end
+        else
+            row:Hide()
+        end
+    end
 end

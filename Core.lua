@@ -47,6 +47,7 @@ local DEFAULTS = {
     characters   = {},
     addonMembers = {},        -- { ["Name-Realm"] = { main, classFile, level, lastSeen, version } }
     dkp          = {},        -- { ["Name-Realm"] = number }  DKP per member
+    dkpHistory   = {},        -- { { player, amount, newTotal, bonusType, source, timestamp } }
     deletedRaids  = {},       -- { ["created:author"] = true }  tombstones for deleted raids
     deletedEvents = {},       -- { ["created:author"] = true }  tombstones for deleted events
     raidGroups   = {},        -- global raid groups { [1..8] = { "Name", ... } }
@@ -297,6 +298,27 @@ function OneGuild:CanEditPermissions()
     local _, _, rankIndex = GetGuildInfo("player")
     if rankIndex and rankIndex ~= nil and rankIndex <= 1 then return true end
     return false
+end
+
+------------------------------------------------------------------------
+-- DKP History  — stores every DKP change for auditability
+-- Each entry: { player, amount, newTotal, bonusType, source, timestamp }
+------------------------------------------------------------------------
+function OneGuild:AddDKPHistory(player, amount, newTotal, bonusType, source)
+    if not self.db then return end
+    if not self.db.dkpHistory then self.db.dkpHistory = {} end
+    table.insert(self.db.dkpHistory, {
+        player    = player,
+        amount    = amount,
+        newTotal  = newTotal,
+        bonusType = bonusType or "manual",
+        source    = source or (UnitName("player") or "?"),
+        timestamp = time(),
+    })
+    -- Cap at 500 entries to avoid SavedVariables bloat
+    while #self.db.dkpHistory > 500 do
+        table.remove(self.db.dkpHistory, 1)
+    end
 end
 
 ------------------------------------------------------------------------

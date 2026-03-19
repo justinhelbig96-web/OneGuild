@@ -898,12 +898,12 @@ local function RenderDKPEditRow(row, member)
     row.dkpCurrentText:Show()
 
     local currentDKP = GetDKP(member)
-    row.dkpBox:SetText(tostring(currentDKP))
+    row.dkpBox:SetText("0")
     row.dkpCurrentText:SetText("|cFF8B7355Aktuell: |r|cFFFFD700" .. tostring(currentDKP) .. " DKP|r")
 
     -- Minus 10
     row.dkpMinus:SetScript("OnClick", function()
-        local val = tonumber(row.dkpBox:GetText()) or currentDKP
+        local val = tonumber(row.dkpBox:GetText()) or 0
         val = val - 10
         row.dkpBox:SetText(tostring(val))
     end)
@@ -917,7 +917,7 @@ local function RenderDKPEditRow(row, member)
 
     -- Plus 10
     row.dkpPlus:SetScript("OnClick", function()
-        local val = tonumber(row.dkpBox:GetText()) or currentDKP
+        local val = tonumber(row.dkpBox:GetText()) or 0
         val = val + 10
         row.dkpBox:SetText(tostring(val))
     end)
@@ -928,12 +928,21 @@ local function RenderDKPEditRow(row, member)
         self:SetBackdropColor(0.1, 0.4, 0.1, 0.8)
     end)
 
-    -- Confirm (OK)
+    -- Confirm (OK) — ADDS entered amount to current DKP
     row.dkpConfirm:SetScript("OnClick", function()
-        local val = tonumber(row.dkpBox:GetText()) or 0
-        SetDKP(member, val)
-        row.dkpCurrentText:SetText("|cFF8B7355Aktuell: |r|cFF66FF66" .. tostring(val) .. " DKP|r")
-        OneGuild:Print(OneGuild.COLORS.SUCCESS .. "DKP fuer " .. memberDisplayName .. " auf " .. val .. " gesetzt.|r")
+        local inputVal = tonumber(row.dkpBox:GetText()) or 0
+        if inputVal == 0 then return end
+        local oldDKP = GetDKP(member)
+        local newTotal = oldDKP + inputVal
+        SetDKP(member, newTotal)
+        row.dkpCurrentText:SetText("|cFF8B7355Aktuell: |r|cFF66FF66" .. tostring(newTotal) .. " DKP|r")
+        row.dkpBox:SetText("0")
+        local prefix = inputVal >= 0 and "+" or ""
+        OneGuild:Print(OneGuild.COLORS.SUCCESS .. prefix .. tostring(inputVal) .. " DKP fuer " .. memberDisplayName .. " (Neu: " .. newTotal .. ")|r")
+        -- Record history
+        if OneGuild.AddDKPHistory then
+            OneGuild:AddDKPHistory(member.sender, inputVal, newTotal, "manual", UnitName("player") or "?")
+        end
         -- Refresh to update DKP in the member row too
         C_Timer.After(0.1, function()
             OneGuild:UpdateMemberRows()
