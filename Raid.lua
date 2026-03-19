@@ -2100,10 +2100,7 @@ function OneGuild:ApplyDKPToSelected(amount)
             local current = self:GetDKPForPlayer(pName)
             local newVal = current + amount
 
-            -- Store locally (centralized — sets ALL keys)
-            self:SetDKPForPlayer(pName, newVal)
-
-            -- Update row display
+            -- Update row display immediately (local visual feedback)
             row.dkpText:SetText("|cFFFFD700" .. tostring(newVal) .. "|r")
             local diffColor = amount >= 0 and "|cFF66FF66+" or "|cFFFF6666"
             row.newDkpText:SetText(diffColor .. tostring(amount) .. "|r")
@@ -2122,13 +2119,12 @@ function OneGuild:ApplyDKPToSelected(amount)
         end
     end
 
-    -- Stagger comm messages to avoid WoW throttle (0.15s per message)
-    for idx, upd in ipairs(updates) do
-        C_Timer.After((idx - 1) * 0.15, function()
-            if OneGuild.SendDKPUpdate then
-                OneGuild:SendDKPUpdate(upd.name, upd.dkp)
-            end
-        end)
+    -- Send all DKP updates immediately — WoW's internal message queue
+    -- handles throttling; receivers use debounced refresh (0.15s)
+    for _, upd in ipairs(updates) do
+        if self.SendDKPUpdate then
+            self:SendDKPUpdate(upd.name, upd.dkp)
+        end
     end
 
     if applied > 0 then

@@ -1209,8 +1209,6 @@ function OneGuild:SendDKPUpdate(memberKey, dkpVal)
     -- Broadcast with timestamp so receivers know which data is freshest
     self:SendCommMessage(MSG_DKP, memberKey .. "|" .. tostring(dkpVal) .. "|" .. tostring(ts))
     self:Debug("DKP gesendet: " .. memberKey .. " = " .. tostring(dkpVal) .. " (ts=" .. ts .. ")")
-    -- Request roster refresh so all online members get the comm update
-    self:RequestGuildRoster()
 end
 
 ------------------------------------------------------------------------
@@ -1284,7 +1282,26 @@ function OneGuild:ProcessDKP(sender, data)
     -- Use centralized setter (stores under ALL known keys + timestamp)
     self:SetDKPForPlayer(memberKey, dkpVal, incomingTs > 0 and incomingTs or nil)
 
-    if self.RefreshMembers then self:RefreshMembers() end
+    -- Debounced UI refresh: collect all DKP updates and refresh once
+    self:ScheduleDKPRefresh()
+end
+
+------------------------------------------------------------------------
+-- Debounced DKP UI refresh  -- avoids rebuilding UI for every single
+-- MSG_DKP in a burst (e.g. 20 players from raid distribution)
+------------------------------------------------------------------------
+do
+    local refreshPending = false
+    function OneGuild:ScheduleDKPRefresh()
+        if refreshPending then return end
+        refreshPending = true
+        C_Timer.After(0.15, function()
+            refreshPending = false
+            if OneGuild.RefreshMembers    then OneGuild:RefreshMembers()    end
+            if OneGuild.RefreshDKPLoot    then OneGuild:RefreshDKPLoot()    end
+            if OneGuild.UpdateMemberRows  then OneGuild:UpdateMemberRows()  end
+        end)
+    end
 end
 
 ------------------------------------------------------------------------

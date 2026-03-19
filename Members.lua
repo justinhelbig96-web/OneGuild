@@ -63,11 +63,7 @@ local function GetDKPKey(member)
 end
 
 local function SetDKP(member, val)
-    -- Use centralized setter (stores under ALL known keys)
-    if OneGuild.SetDKPForPlayer then
-        OneGuild:SetDKPForPlayer(member.sender, val)
-    end
-    -- Broadcast to guild
+    -- SendDKPUpdate stores locally with timestamp AND broadcasts to guild
     if OneGuild.SendDKPUpdate then
         OneGuild:SendDKPUpdate(member.sender, val)
     end
