@@ -178,6 +178,23 @@ local function StartDrag(playerName, classFile)
 end
 
 local function StopDrag()
+    if dragPlayerName then
+        -- Check if dropped on a group panel
+        for g = 1, MAX_GROUPS do
+            local panel = groupPanels[g]
+            if panel and panel:IsMouseOver() then
+                MoveToGroup(dragPlayerName, g)
+                dragPlayerName  = nil
+                dragPlayerClass = nil
+                if dragFrame then dragFrame:Hide() end
+                return
+            end
+        end
+        -- Check if dropped on roster panel (remove from group)
+        if groupsFrame and groupsFrame.rosterPanel and groupsFrame.rosterPanel:IsMouseOver() then
+            RemoveFromGroup(dragPlayerName)
+        end
+    end
     dragPlayerName  = nil
     dragPlayerClass = nil
     if dragFrame then dragFrame:Hide() end
@@ -340,16 +357,16 @@ function OneGuild:BuildRaidGroupsFrame()
         for _, old in ipairs(f.lmMenuItems) do old:Hide() end
         wipe(f.lmMenuItems)
 
-        local raidIdx = OneGuild.currentRaidIdx
+        local curRaidIdx = OneGuild.currentRaidIdx
         local entries = {}
         -- "None" option
         table.insert(entries, { name = "", display = "|cFF888888-- keiner --|r" })
-        if raidIdx and OneGuild.db and OneGuild.db.raids and OneGuild.db.raids[raidIdx] then
-            local rd = OneGuild.db.raids[raidIdx]
-            local signups = rd.signups or {}
-            for name, s in pairs(signups) do
-                if type(s) == "table" and s.status == "accepted" then
-                    local short = strsplit("-", name)
+        if curRaidIdx and OneGuild.db and OneGuild.db.raids and OneGuild.db.raids[curRaidIdx] then
+            local rd = OneGuild.db.raids[curRaidIdx]
+            local sigs = rd.signups or {}
+            for sName, sData in pairs(sigs) do
+                if type(sData) == "table" and sData.status == "accepted" then
+                    local short = strsplit("-", sName)
                     table.insert(entries, { name = short, display = "|cFFFFD700" .. short .. "|r" })
                 end
             end
@@ -374,8 +391,9 @@ function OneGuild:BuildRaidGroupsFrame()
             item:SetScript("OnEnter", function(s) s:SetBackdropColor(0.3, 0.18, 0.05, 0.8) end)
             item:SetScript("OnLeave", function(s) s:SetBackdropColor(0, 0, 0, 0) end)
             item:SetScript("OnClick", function()
-                if raidIdx and OneGuild.db and OneGuild.db.raids and OneGuild.db.raids[raidIdx] then
-                    OneGuild.db.raids[raidIdx].lootmeister = (e.name ~= "") and e.name or nil
+                local ri = OneGuild.currentRaidIdx
+                if ri and OneGuild.db and OneGuild.db.raids and OneGuild.db.raids[ri] then
+                    OneGuild.db.raids[ri].lootmeister = (e.name ~= "") and e.name or nil
                 end
                 lmMenu:Hide()
                 OneGuild:RefreshRaidGroups()
