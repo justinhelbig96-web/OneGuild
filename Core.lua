@@ -21,6 +21,46 @@ OneGuild.REQUIRED_GUILD = "One"
 OneGuild.VERSION = "1.0.9"
 
 ------------------------------------------------------------------------
+-- Safe Officer Note Writer (compat for different WoW API versions)
+------------------------------------------------------------------------
+local function SafeSetOfficerNote(index, note)
+    if GuildRosterSetOfficerNote then
+        GuildRosterSetOfficerNote(index, note)
+        return true
+    elseif C_GuildInfo and C_GuildInfo.SetOfficerNote then
+        C_GuildInfo.SetOfficerNote(index, note)
+        return true
+    elseif C_GuildInfo and C_GuildInfo.SetMemberNote then
+        -- Some versions use SetMemberNote with a flag
+        C_GuildInfo.SetMemberNote(index, note, true)
+        return true
+    else
+        print("|cFFFF0000[OneGuild] ERROR: Keine SetOfficerNote-Funktion gefunden! Bitte /ogapi ausfuehren und Ergebnis melden.|r")
+        return false
+    end
+end
+OneGuild.SafeSetOfficerNote = SafeSetOfficerNote
+
+-- Debug slash command: lists all C_GuildInfo functions
+SLASH_OGAPI1 = "/ogapi"
+SlashCmdList["OGAPI"] = function()
+    print("|cFFFFB800[OneGuild] C_GuildInfo Funktionen:|r")
+    if C_GuildInfo then
+        for k, v in pairs(C_GuildInfo) do
+            print("  |cFF66FF66" .. k .. "|r = " .. type(v))
+        end
+    else
+        print("|cFFFF4444C_GuildInfo existiert nicht!|r")
+    end
+    print("|cFFFFB800[OneGuild] Globale Guild-Funktionen:|r")
+    local globals = {"GuildRosterSetOfficerNote", "GuildRosterSetPublicNote", "SetGuildRosterOfficerNote"}
+    for _, name in ipairs(globals) do
+        local fn = _G[name]
+        print("  |cFF66FF66" .. name .. "|r = " .. tostring(fn))
+    end
+end
+
+------------------------------------------------------------------------
 -- Admin Whitelist  –  now loaded from SavedVariables (db.settings.whitelist)
 -- Guild leader (rank index 0) is always auto-admin.
 -- Only rank 0 can edit the whitelist.
@@ -859,7 +899,7 @@ function OneGuild:SaveDKPToOfficerNote(memberKey, dkpVal)
             local gs = strsplit("-", gName)
             if gs == shortName or gName == memberKey then
                 local newNote = "DKP:" .. tostring(dkpVal)
-                C_GuildInfo.SetOfficerNote(i, newNote)
+                SafeSetOfficerNote(i, newNote)
                 print("|cFF00FF00[OneGuild] SetGuildNote_DKP_" .. gs .. " : " .. tostring(dkpVal) .. "|r")
                 self:Debug("DKP in Offiziersnotiz gespeichert: " .. gs .. " = " .. tostring(dkpVal))
                 -- Force roster refresh so other online members get the update
@@ -927,7 +967,7 @@ function OneGuild:PushAllDKPToOfficerNotes()
                 -- Only write if different or missing
                 if currentDKP ~= localDKP then
                     local newNote = "DKP:" .. tostring(localDKP)
-                    C_GuildInfo.SetOfficerNote(i, newNote)
+                    SafeSetOfficerNote(i, newNote)
                     print("|cFF00FF00[OneGuild] SetGuildNote_DKP_" .. gs .. " : " .. tostring(localDKP) .. "|r")
                     pushed = pushed + 1
                 end
