@@ -48,61 +48,28 @@ local function GetClassColor(classFile)
 end
 
 ------------------------------------------------------------------------
--- Helper: get DKP for a member
+-- Helper: get DKP for a member (uses centralized getter)
 ------------------------------------------------------------------------
 local function GetDKP(member)
-    if not OneGuild.db or not OneGuild.db.dkp then return 0 end
-    local dkp = OneGuild.db.dkp
-    -- Check all sender keys + their short names
-    if member._senderKeys then
-        for _, sk in ipairs(member._senderKeys) do
-            local v = dkp[sk]
-            if v and v ~= 0 then return v end
-            local short = strsplit("-", sk)
-            if short and short ~= sk then
-                v = dkp[short]
-                if v and v ~= 0 then return v end
-            end
-        end
-    end
-    -- Check primary sender
-    local v = dkp[member.sender]
-    if v and v ~= 0 then return v end
-    -- Check main name
-    if member.mainName then
-        v = dkp[member.mainName]
-        if v and v ~= 0 then return v end
+    -- Use centralized function (resolves via short name)
+    if OneGuild.GetDKPForPlayer then
+        return OneGuild:GetDKPForPlayer(member.sender)
     end
     return 0
 end
 
 local function GetDKPKey(member)
-    if member._senderKeys and OneGuild.db and OneGuild.db.dkp then
-        local dkp = OneGuild.db.dkp
-        for _, sk in ipairs(member._senderKeys) do
-            if dkp[sk] and dkp[sk] ~= 0 then return sk end
-            local short = strsplit("-", sk)
-            if short and short ~= sk and dkp[short] and dkp[short] ~= 0 then return short end
-        end
-    end
     return member.sender
 end
 
 local function SetDKP(member, val)
-    if not OneGuild.db then return end
-    if not OneGuild.db.dkp then OneGuild.db.dkp = {} end
-    local primaryKey = GetDKPKey(member)
-    -- Store under all known sender keys so lookups always work
-    if member._senderKeys then
-        for _, sk in ipairs(member._senderKeys) do
-            OneGuild.db.dkp[sk] = val
-        end
-    else
-        OneGuild.db.dkp[primaryKey] = val
+    -- Use centralized setter (stores under ALL known keys)
+    if OneGuild.SetDKPForPlayer then
+        OneGuild:SetDKPForPlayer(member.sender, val)
     end
     -- Broadcast to guild
     if OneGuild.SendDKPUpdate then
-        OneGuild:SendDKPUpdate(primaryKey, val)
+        OneGuild:SendDKPUpdate(member.sender, val)
     end
 end
 

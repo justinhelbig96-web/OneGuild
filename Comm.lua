@@ -1077,12 +1077,8 @@ function OneGuild:ProcessDKP(sender, data)
     if not memberKey then return end
     local dkpVal = tonumber(dkpStr) or 0
 
-    self.db.dkp[memberKey] = dkpVal
-    -- Also store under short name for consistent lookups
-    local shortKey = strsplit("-", memberKey)
-    if shortKey and shortKey ~= memberKey then
-        self.db.dkp[shortKey] = dkpVal
-    end
+    -- Use centralized setter (stores under ALL known keys)
+    self:SetDKPForPlayer(memberKey, dkpVal)
 
     if self.RefreshMembers then self:RefreshMembers() end
 end

@@ -1936,7 +1936,7 @@ function OneGuild:RefreshDKPDistribution()
                     seen[pName] = true
                     local short = strsplit("-", pName)
                     seen[short] = true
-                    local dkp = (self.db.dkp and (self.db.dkp[pName] or self.db.dkp[short])) or 0
+                    local dkp = self:GetDKPForPlayer(pName)
                     table.insert(players, {
                         name     = short,
                         fullName = pName,
@@ -1959,7 +1959,7 @@ function OneGuild:RefreshDKPDistribution()
                         if not seen[sName] and not seen[short] then
                             seen[sName] = true
                             seen[short] = true
-                            local dkp = (self.db.dkp and (self.db.dkp[sName] or self.db.dkp[short])) or 0
+                            local dkp = self:GetDKPForPlayer(sName)
                             table.insert(players, {
                                 name     = short,
                                 fullName = sName,
@@ -2093,13 +2093,12 @@ function OneGuild:ApplyDKPToSelected(amount)
             local pName = row.fullName
             local short = strsplit("-", pName)
 
-            -- Get current DKP
-            local current = self.db.dkp[pName] or self.db.dkp[short] or 0
+            -- Get current DKP (centralized)
+            local current = self:GetDKPForPlayer(pName)
             local newVal = current + amount
 
-            -- Store locally
-            self.db.dkp[pName]  = newVal
-            self.db.dkp[short]  = newVal
+            -- Store locally (centralized — sets ALL keys)
+            self:SetDKPForPlayer(pName, newVal)
 
             -- Broadcast + officer note
             if self.SendDKPUpdate then

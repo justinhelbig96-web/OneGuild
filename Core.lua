@@ -322,6 +322,58 @@ function OneGuild:AddDKPHistory(player, amount, newTotal, bonusType, source)
 end
 
 ------------------------------------------------------------------------
+-- CENTRAL DKP FUNCTIONS  — single source of truth for all DKP access
+-- Internally uses SHORT NAME (e.g. "Rigipsplatte") as canonical key.
+------------------------------------------------------------------------
+function OneGuild:NormalizeDKPKey(nameOrKey)
+    if not nameOrKey then return nil end
+    local short = strsplit("-", nameOrKey)
+    return short
+end
+
+-- Collect all known keys for a player (short + full variants)
+function OneGuild:GetAllDKPKeys(nameOrKey)
+    local short = strsplit("-", nameOrKey)
+    local keys = { short }
+    if nameOrKey ~= short then
+        table.insert(keys, nameOrKey)
+    end
+    -- Also check addonMembers for other sender keys for same main
+    if self.db and self.db.addonMembers then
+        for senderKey, member in pairs(self.db.addonMembers) do
+            local sk = strsplit("-", senderKey)
+            if sk == short then
+                if senderKey ~= short then
+                    local found = false
+                    for _, k in ipairs(keys) do
+                        if k == senderKey then found = true; break end
+                    end
+                    if not found then table.insert(keys, senderKey) end
+                end
+            end
+        end
+    end
+    return keys
+end
+
+function OneGuild:GetDKPForPlayer(nameOrKey)
+    if not self.db or not self.db.dkp then return 0 end
+    local short = self:NormalizeDKPKey(nameOrKey)
+    if not short then return 0 end
+    return self.db.dkp[short] or 0
+end
+
+function OneGuild:SetDKPForPlayer(nameOrKey, val)
+    if not self.db then return end
+    if not self.db.dkp then self.db.dkp = {} end
+    local allKeys = self:GetAllDKPKeys(nameOrKey)
+    -- Store under ALL known keys so any lookup path finds the same value
+    for _, k in ipairs(allKeys) do
+        self.db.dkp[k] = val
+    end
+end
+
+------------------------------------------------------------------------
 -- Utility: Format timestamp
 ------------------------------------------------------------------------
 function OneGuild:FormatTime(timestamp)
