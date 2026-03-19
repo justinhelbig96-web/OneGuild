@@ -80,6 +80,24 @@ local dragPlayerClass = nil  -- class of player being dragged
 local MoveToGroup
 local RemoveFromGroup
 
+-- Permission check: RL, Assist, or Whitelist can edit groups
+local function CanEditGroups()
+    local myName = UnitName("player") or ""
+    -- Whitelist always allowed
+    if OneGuild.ADMIN_WHITELIST and OneGuild.ADMIN_WHITELIST[myName] then
+        return true
+    end
+    -- In raid: RL or Assist
+    if IsInRaid() then
+        if UnitIsGroupLeader("player") or UnitIsGroupAssistant("player") then
+            return true
+        end
+    end
+    -- Addon-admin (guild leader)
+    if OneGuild.isAdmin then return true end
+    return false
+end
+
 ------------------------------------------------------------------------
 -- Get current raid roster grouped
 ------------------------------------------------------------------------
@@ -173,6 +191,7 @@ local function CreateDragFrame()
 end
 
 local function StartDrag(playerName, classFile)
+    if not CanEditGroups() then return end
     dragPlayerName  = playerName
     dragPlayerClass = classFile
     local df = CreateDragFrame()
@@ -216,6 +235,10 @@ end
 -- Move player to group (addon-managed)
 ------------------------------------------------------------------------
 MoveToGroup = function(playerName, targetGroup, targetSlot)
+    if not CanEditGroups() then
+        OneGuild:Print("|cFFFF4444Nur Raidleader, Assistenten oder Admins können Gruppen bearbeiten.|r")
+        return
+    end
     if not OneGuild.db then return end
     if not OneGuild.db.raidGroups then OneGuild.db.raidGroups = {} end
     local rg = OneGuild.db.raidGroups
@@ -287,6 +310,10 @@ end
 -- Remove player from all groups (back to roster)
 ------------------------------------------------------------------------
 RemoveFromGroup = function(playerName)
+    if not CanEditGroups() then
+        OneGuild:Print("|cFFFF4444Nur Raidleader, Assistenten oder Admins können Gruppen bearbeiten.|r")
+        return
+    end
     if not OneGuild.db then return end
     local rg = OneGuild.db.raidGroups
     if not rg then return end
@@ -529,6 +556,12 @@ function OneGuild:BuildRaidGroupsFrame()
             cell.bg:SetAllPoints()
             cell.bg:SetColorTexture(0.1, 0.06, 0.03, 0.4)
 
+            -- Slot number label (visible when empty)
+            cell.slotLabel = cell:CreateFontString(nil, "ARTWORK")
+            cell.slotLabel:SetFont("Fonts\\FRIZQT__.TTF", 9, "")
+            cell.slotLabel:SetPoint("LEFT", cell, "LEFT", 3, 0)
+            cell.slotLabel:SetText("|cFF444430" .. s .. ".|r")
+
             cell.text = cell:CreateFontString(nil, "OVERLAY")
             cell.text:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
             cell.text:SetPoint("LEFT", cell, "LEFT", 3, 0)
@@ -766,12 +799,14 @@ function OneGuild:RefreshRaidGroups()
 
                 cell.text:SetText(display)
                 cell.bg:SetColorTexture(0.1, 0.06, 0.03, 0.4)
+                if cell.slotLabel then cell.slotLabel:Hide() end
                 cell:SetAlpha(1)
             else
                 cell.playerName  = nil
                 cell.playerClass = nil
                 cell.text:SetText("")
-                cell.bg:SetColorTexture(0.05, 0.03, 0.02, 0.2)
+                cell.bg:SetColorTexture(0.08, 0.05, 0.03, 0.35)
+                if cell.slotLabel then cell.slotLabel:Show() end
                 cell:SetAlpha(1)
             end
         end

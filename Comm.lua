@@ -1020,6 +1020,41 @@ function OneGuild:ProcessDKP(sender, data)
     if not data or not self.db then return end
     if not self.db.dkp then self.db.dkp = {} end
 
+    -- Only accept DKP from admin/whitelist senders
+    local senderShort = strsplit("-", sender)
+    local isAdmin = false
+    if self.ADMIN_WHITELIST and (self.ADMIN_WHITELIST[sender] or self.ADMIN_WHITELIST[senderShort]) then
+        isAdmin = true
+    end
+    -- Also check if sender is guild leader by looking at addonMembers
+    if not isAdmin and self.db.addonMembers then
+        local info = self.db.addonMembers[sender]
+        if not info then
+            for k, v in pairs(self.db.addonMembers) do
+                local ks = strsplit("-", k)
+                if ks == senderShort then info = v; break end
+            end
+        end
+    end
+    -- Accept from self always
+    local myName = UnitName("player") or ""
+    if sender == myName or senderShort == myName then isAdmin = true end
+    -- Accept from anyone who is RL or Assist (check raid roster)
+    if not isAdmin and IsInRaid() then
+        local numRaid = GetNumGroupMembers() or 0
+        for i = 1, numRaid do
+            local name, rank = GetRaidRosterInfo(i)
+            if name then
+                local ns = strsplit("-", name)
+                if ns == senderShort or name == sender then
+                    if rank and rank >= 1 then isAdmin = true end
+                    break
+                end
+            end
+        end
+    end
+    if not isAdmin then return end  -- ignore DKP from non-admins
+
     local memberKey, dkpStr = strsplit("|", data)
     if not memberKey then return end
     local dkpVal = tonumber(dkpStr) or 0
