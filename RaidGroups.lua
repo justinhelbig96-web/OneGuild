@@ -319,6 +319,7 @@ function OneGuild:BuildRaidGroupsFrame()
     local lmBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
     lmBtn:SetSize(140, 20)
     lmBtn:SetPoint("LEFT", lmLabel, "RIGHT", 4, 0)
+    lmBtn:SetFrameLevel(tb:GetFrameLevel() + 5)
     lmBtn:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
