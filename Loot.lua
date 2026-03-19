@@ -30,21 +30,33 @@ local function IsInGuildRaid()
     if not IsInRaid() then return false end
     if not IsInGuild() then return false end
 
-    -- Count how many raid members are in our guild
-    local guildName = OneGuild.REQUIRED_GUILD
-    local numRaid   = GetNumGroupMembers() or 0
-    local guildCount = 0
-
-    for i = 1, numRaid do
-        local name, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, gName =
-            GetRaidRosterInfo(i)
-        if gName == guildName then
-            guildCount = guildCount + 1
+    -- Build a set of guild member names (short names)
+    local guildMembers = {}
+    local numGuild = GetNumGuildMembers() or 0
+    for i = 1, numGuild do
+        local gName = GetGuildRosterInfo(i)
+        if gName then
+            local short = strsplit("-", gName)
+            guildMembers[short] = true
+            guildMembers[gName] = true
         end
     end
 
-    -- Must be 100% guild members (rein interner Gilden-Raid)
-    return guildCount == numRaid and numRaid > 0
+    -- Check all raid members are in our guild
+    local numRaid = GetNumGroupMembers() or 0
+    if numRaid == 0 then return false end
+
+    for i = 1, numRaid do
+        local name = GetRaidRosterInfo(i)
+        if name then
+            local short = strsplit("-", name)
+            if not guildMembers[name] and not guildMembers[short] then
+                return false
+            end
+        end
+    end
+
+    return true
 end
 
 local function IsRaidLeader()
@@ -164,6 +176,9 @@ function OneGuild:ActivateLootSystem()
     local target = lm and ("Lootmeister (" .. lm .. ")") or "Raid Leader"
     self:Print(OneGuild.COLORS.SUCCESS ..
         "Loot-System aktiviert! Alle Items gehen automatisch an den " .. target .. ".|r")
+    -- Real-time UI update
+    if self.RefreshRaidGroups then self:RefreshRaidGroups() end
+    if self.RefreshAddonCheckWindow then self:RefreshAddonCheckWindow() end
 end
 
 --- Deactivate loot system
@@ -171,6 +186,9 @@ function OneGuild:DeactivateLootSystem()
     if not lootSystemActive then return end
     lootSystemActive = false
     self:Print(OneGuild.COLORS.WARNING .. "Loot-System deaktiviert.|r")
+    -- Real-time UI update
+    if self.RefreshRaidGroups then self:RefreshRaidGroups() end
+    if self.RefreshAddonCheckWindow then self:RefreshAddonCheckWindow() end
 end
 
 --- Check if loot system is currently active
@@ -200,8 +218,14 @@ function OneGuild:StartAddonCheck()
         return
     end
 
-    if not IsRaidLeader() and not IsRaidAssist() then
-        self:PrintError("Nur der Raid Leader oder Assistent kann den Addon-Check starten!")
+    -- Allow RL, Assist, or Whitelist users
+    local myName = UnitName("player") or ""
+    local allowed = IsRaidLeader() or IsRaidAssist()
+    if not allowed and self.ADMIN_WHITELIST and self.ADMIN_WHITELIST[myName] then
+        allowed = true
+    end
+    if not allowed then
+        self:PrintError("Nur der Raid Leader, Assistent oder Admin kann den Addon-Check starten!")
         return
     end
 
@@ -362,7 +386,6 @@ function OneGuild:ShowAddonCheckWindow()
             -- Notify everyone to activate
             OneGuild:SendCommMessage("LAP", "1")
             OneGuild:PrintSuccess("Loot-System für alle aktiviert!")
-            f:Hide()
         else
             OneGuild:PrintError("Nicht alle Spieler haben das aktuelle Addon! Kann nicht aktivieren.")
         end
@@ -400,6 +423,37 @@ function OneGuild:ShowAddonCheckWindow()
     end)
     refreshBtn:SetScript("OnLeave", function(self)
         self:SetBackdropColor(0.3, 0.2, 0.05, 0.8)
+    end)
+
+    -- Deactivate button (shown when loot system is active)
+    local deactivateBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
+    deactivateBtn:SetSize(340, 28)
+    deactivateBtn:SetPoint("BOTTOM", activateBtn, "TOP", 80, 6)
+    deactivateBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    deactivateBtn:SetBackdropColor(0.4, 0.1, 0.1, 0.9)
+    deactivateBtn:SetBackdropBorderColor(0.7, 0.2, 0.2, 0.6)
+
+    local deactivateBtnText = deactivateBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    deactivateBtnText:SetPoint("CENTER")
+    deactivateBtnText:SetText("|cFFFF6666Loot-System deaktivieren|r")
+    f.deactivateBtn = deactivateBtn
+
+    deactivateBtn:SetScript("OnClick", function()
+        OneGuild:DeactivateLootSystem()
+        -- Notify everyone to deactivate
+        OneGuild:SendCommMessage("LAP", "0")
+        OneGuild:PrintSuccess("Loot-System für alle deaktiviert!")
+    end)
+    deactivateBtn:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(0.55, 0.15, 0.15, 1)
+    end)
+    deactivateBtn:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0.4, 0.1, 0.1, 0.9)
     end)
 
     lootCheckFrame = f
@@ -534,16 +588,24 @@ function OneGuild:RefreshAddonCheckWindow()
         end
     end
 
-    -- Enable/disable activate button
+    -- Enable/disable activate button based on check results + loot state
     local allReady = (current == total and total > 0 and not lootCheckInProgress)
-    if allReady then
+    if lootSystemActive then
+        -- Loot system already active — show deactivate, disable activate
+        f.activateBtn:Disable()
+        f.activateBtn:SetBackdropColor(0.05, 0.15, 0.05, 0.4)
+        f.activateBtnText:SetText("|cFF66FF66\226\156\148 Loot: AKTIV|r")
+        if f.deactivateBtn then f.deactivateBtn:Show() end
+    elseif allReady then
         f.activateBtn:Enable()
         f.activateBtn:SetBackdropColor(0.1, 0.35, 0.1, 0.9)
         f.activateBtnText:SetText("|cFF66FF66Loot-System aktivieren|r")
+        if f.deactivateBtn then f.deactivateBtn:Hide() end
     else
         f.activateBtn:Disable()
         f.activateBtn:SetBackdropColor(0.15, 0.1, 0.1, 0.6)
         f.activateBtnText:SetText("|cFF666666Loot-System aktivieren|r")
+        if f.deactivateBtn then f.deactivateBtn:Hide() end
     end
 end
 
@@ -557,6 +619,8 @@ function OneGuild:HandleLootActivate(sender, data)
     elseif data == "0" then
         self:DeactivateLootSystem()
     end
+    -- Real-time UI refresh
+    if self.RefreshRaidGroups then self:RefreshRaidGroups() end
 end
 
 ------------------------------------------------------------------------
