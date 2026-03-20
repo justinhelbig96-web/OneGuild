@@ -672,17 +672,11 @@ function FX:ApplyToMainUI()
     -- 2) Traveling border shimmer
     FX:BorderShimmer(f, 5.0, { 1, 0.75, 0.2, 0.7 })
 
-    -- 3) Diagonal shine sweep (very visible!)
-    FX:ShineSweep(f, 6.0, { 1, 0.8, 0.3 })
+    -- 3) Golden floating particles (lots!)
+    FX:GoldParticles(f, 35)
 
-    -- 4) Golden floating particles
-    FX:GoldParticles(f, 15)
-
-    -- 5) Decorative pulsing header bars
+    -- 4) Decorative pulsing header bars
     FX:HeaderShine(f, -78)
-
-    -- 6) Animated progress bar under header
-    FX:AnimatedBar(f, f, "TOPLEFT", 12, -80, 760, 2, 8.0, { 0.9, 0.65, 0.15 })
 
     -- 7) Title text glow pulse
     if f.titleText then
