@@ -255,7 +255,7 @@ function OneGuild:ShowWelcomeScreen()
         "Guild-Lock: Nur fuer Mitglieder deiner Gilde.",
         390, -125, 1.9)
 
-    -- ===== CHANGELOG =====
+    -- ===== CHANGELOG WITH TABS =====
     local changelogSep = container:CreateTexture(nil, "ARTWORK")
     changelogSep:SetHeight(1)
     changelogSep:SetPoint("TOPLEFT", container, "TOPLEFT", 30, -500)
@@ -264,34 +264,120 @@ function OneGuild:ShowWelcomeScreen()
 
     local changelogTitle = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     changelogTitle:SetPoint("TOP", changelogSep, "BOTTOM", 0, -8)
-    changelogTitle:SetText("|cFFFFD700Changelog v" .. OneGuild.VERSION .. "|r")
+    changelogTitle:SetText("|cFFFFD700Changelog|r")
     FadeIn(changelogTitle, 2.0, 0.5)
 
+    -- Changelog data per version
+    local changelogData = {
+        { version = "v1.3.1", entries = {
+            "Shop: Drag & Drop Items aus dem Inventar",
+            "Shop: Preis in Gold / Silber / Kupfer",
+            "Shop: Item-Icon & Link in Angeboten",
+        }},
+        { version = "v1.3.0", entries = {
+            "Gilden-Shop: Items an Gildenmitglieder verkaufen",
+            "Versteckte Auktions-Gebote (nur Auktionator sieht Details)",
+            "Gilden-Notizen Sync an alle Online-Mitglieder",
+            "DKP History: Loeschen & Export Buttons",
+        }},
+        { version = "v1.2.9", entries = {
+            "Gilden-Notizen: Echtzeit-Broadcast an alle Online-Mitglieder",
+        }},
+        { version = "v1.2.8", entries = {
+            "DKP History: Loeschen & Export (Copy-Window)",
+        }},
+        { version = "v1.2.x", entries = {
+            "DKP Bestaetigungsdialog vor jeder Aenderung",
+            "Dual-Channel DKP Sync (GUILD + RAID/PARTY)",
+            "Triple-Send & Batch-Nachrichten",
+            "Farb-codiertes DKP Log im Chat",
+            "30s Auto-Sync fuer DKP Daten",
+        }},
+    }
+
+    -- Tab buttons container
+    local tabBar = CreateFrame("Frame", nil, container)
+    tabBar:SetHeight(22)
+    tabBar:SetPoint("TOPLEFT", changelogTitle, "BOTTOMLEFT", -60, -8)
+    tabBar:SetPoint("TOPRIGHT", changelogTitle, "BOTTOMRIGHT", 60, -8)
+    FadeIn(tabBar, 2.05, 0.5)
+
+    -- Body text
     local changelogBody = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    changelogBody:SetPoint("TOP", changelogTitle, "BOTTOM", 0, -6)
-    changelogBody:SetPoint("LEFT", container, "LEFT", 40, 0)
-    changelogBody:SetPoint("RIGHT", container, "RIGHT", -40, 0)
+    changelogBody:SetPoint("TOP", tabBar, "BOTTOM", 0, -8)
+    changelogBody:SetPoint("LEFT", container, "LEFT", 60, 0)
+    changelogBody:SetPoint("RIGHT", container, "RIGHT", -60, 0)
     changelogBody:SetJustifyH("LEFT")
     changelogBody:SetWordWrap(true)
-    changelogBody:SetSpacing(2)
-    changelogBody:SetText(
-        "|cFFFFCC00v1.3.1|r\n" ..
-        "|cFF66FF66+|r Shop: Drag & Drop Items aus dem Inventar\n" ..
-        "|cFF66FF66+|r Shop: Preis in |cFFFFD700Gold|r / |cFFC0C0C0Silber|r / |cFFB87333Kupfer|r\n" ..
-        "|cFF66FF66+|r Shop: Item-Icon & Link in Angeboten\n" ..
-        "\n|cFFFFCC00v1.3.0|r\n" ..
-        "|cFF66FF66+|r Gilden-Shop: Items an Gildenmitglieder verkaufen\n" ..
-        "|cFF66FF66+|r Versteckte Auktions-Gebote (nur Auktionator sieht Details)\n" ..
-        "|cFF66FF66+|r Gilden-Notizen Sync an alle Online-Mitglieder\n" ..
-        "|cFF66FF66+|r DKP History: Loeschen & Export Buttons\n" ..
-        "\n|cFFFFCC00v1.2.x|r\n" ..
-        "|cFF66FF66+|r DKP Bestaetigungsdialog vor jeder Aenderung\n" ..
-        "|cFF66FF66+|r Dual-Channel DKP Sync (GUILD + RAID/PARTY)\n" ..
-        "|cFF66FF66+|r Triple-Send & Batch-Nachrichten fuer zuverlaessigen Sync\n" ..
-        "|cFF66FF66+|r Farb-codiertes DKP Log im Chat\n" ..
-        "|cFF66FF66+|r 30s Auto-Sync fuer DKP Daten"
-    )
+    changelogBody:SetSpacing(3)
     FadeIn(changelogBody, 2.1, 0.5)
+
+    -- Create version tabs
+    local clTabs = {}
+    local tabWidth = 70
+    local tabGap = 4
+    local totalWidth = #changelogData * tabWidth + (#changelogData - 1) * tabGap
+    local startX = -totalWidth / 2
+
+    local function ShowChangelogVersion(idx)
+        local data = changelogData[idx]
+        if not data then return end
+        local lines = {}
+        for _, e in ipairs(data.entries) do
+            table.insert(lines, "|cFF66FF66+|r " .. e)
+        end
+        changelogBody:SetText(table.concat(lines, "\n"))
+        -- Update tab highlights
+        for i, t in ipairs(clTabs) do
+            if i == idx then
+                t:SetBackdropColor(0.5, 0.35, 0.05, 0.9)
+                t:SetBackdropBorderColor(0.8, 0.6, 0.1, 0.8)
+                t.text:SetText("|cFFFFFFFF" .. changelogData[i].version .. "|r")
+            else
+                t:SetBackdropColor(0.12, 0.12, 0.18, 0.8)
+                t:SetBackdropBorderColor(0.3, 0.3, 0.4, 0.5)
+                t.text:SetText("|cFF888888" .. changelogData[i].version .. "|r")
+            end
+        end
+    end
+
+    for i, vData in ipairs(changelogData) do
+        local tab = CreateFrame("Button", nil, tabBar, "BackdropTemplate")
+        tab:SetSize(tabWidth, 20)
+        tab:SetPoint("LEFT", tabBar, "CENTER", startX + (i - 1) * (tabWidth + tabGap), 0)
+        tab:RegisterForClicks("AnyUp")
+        tab:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 8,
+            insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+        })
+        tab:SetBackdropColor(0.12, 0.12, 0.18, 0.8)
+        tab:SetBackdropBorderColor(0.3, 0.3, 0.4, 0.5)
+        local tabText = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        tabText:SetPoint("CENTER")
+        tabText:SetText("|cFF888888" .. vData.version .. "|r")
+        tab.text = tabText
+        tab:SetScript("OnEnter", function(self)
+            if self.active then return end
+            self:SetBackdropColor(0.25, 0.2, 0.08, 0.9)
+        end)
+        tab:SetScript("OnLeave", function(self)
+            if self.active then return end
+            self:SetBackdropColor(0.12, 0.12, 0.18, 0.8)
+        end)
+        local idx = i
+        tab:SetScript("OnClick", function()
+            for _, t in ipairs(clTabs) do t.active = false end
+            tab.active = true
+            ShowChangelogVersion(idx)
+        end)
+        clTabs[i] = tab
+    end
+
+    -- Show first tab (latest) by default
+    clTabs[1].active = true
+    ShowChangelogVersion(1)
 
     -- Bottom area
     local bottomBar = CreateFrame("Frame", nil, container)
