@@ -188,6 +188,15 @@ end
 function OneGuild:RefreshNotes()
     if not self.db then return end
 
+    -- Migrate old notes without ID
+    if self.db.notes then
+        for _, n in ipairs(self.db.notes) do
+            if not n.id then
+                n.id = (n.author or "unknown") .. "-" .. (n.timestamp or 0) .. "-" .. math.random(1000, 9999)
+            end
+        end
+    end
+
     -- Update MOTD
     self:UpdateMOTDDisplay()
 
@@ -255,7 +264,15 @@ end
 ------------------------------------------------------------------------
 function OneGuild:DeleteNote(index)
     if not self.db or not self.db.notes[index] then return end
+    local note = self.db.notes[index]
+    local noteId = note.id
     table.remove(self.db.notes, index)
+
+    -- Broadcast deletion to guild
+    if noteId and self.BroadcastNoteDel then
+        self:BroadcastNoteDel(noteId)
+    end
+
     self:Print("Notiz gelöscht.")
     self:RefreshNotes()
 end
@@ -365,11 +382,19 @@ function OneGuild:SaveNoteFromDialog()
         return
     end
 
-    table.insert(self.db.notes, {
+    local noteId = self:GetPlayerName() .. "-" .. time() .. "-" .. math.random(1000, 9999)
+    local note = {
+        id        = noteId,
         author    = self:GetPlayerName(),
         text      = text,
         timestamp = time(),
-    })
+    }
+    table.insert(self.db.notes, note)
+
+    -- Broadcast to guild
+    if self.BroadcastNote then
+        self:BroadcastNote(note)
+    end
 
     self:PrintSuccess("Notiz gespeichert!")
     f:Hide()

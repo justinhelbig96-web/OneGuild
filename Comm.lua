@@ -40,6 +40,9 @@ local MSG_AUCCANCEL= "ACC"          -- DKP auction cancel
 local MSG_WLSYNC   = "WLS"          -- whitelist sync
 local MSG_DKPBATCH = "DKB"          -- batch DKP (multiple players in one msg)
 local MSG_DKPREQ   = "DKR"          -- request DKP snapshot from admins
+local MSG_NOTE     = "NT"           -- guild note (create/sync)
+local MSG_NOTEDEL  = "NTD"          -- guild note deleted
+local MSG_NOTEREQ  = "NTR"          -- request all notes from online members
 
 local DKP_SYNC_INTERVAL = 30         -- DKP-only auto-sync every 30 seconds
 local DKP_TRIPLE_DELAYS = { 0, 3, 8 } -- triple-send delays for reliability
@@ -97,6 +100,13 @@ function OneGuild:InitComm()
     C_Timer.After(5, function()
         if OneGuild:IsAuthorized() then
             OneGuild:SendCommMessage(MSG_DKPREQ)
+        end
+    end)
+
+    -- Request notes from online members on login
+    C_Timer.After(7, function()
+        if OneGuild:IsAuthorized() then
+            OneGuild:SendCommMessage(MSG_NOTEREQ)
         end
     end)
 
@@ -203,6 +213,8 @@ function OneGuild:FullSync()
     delay = self:BroadcastWhitelist(delay)
     -- tombstones (deleted raids/events)
     delay = self:BroadcastTombstones(delay)
+    -- guild notes
+    delay = self:BroadcastAllNotes(delay)
 
     self:Debug("Comm: FullSync gestartet (broadcasts bis +" .. delay .. "s)")
 end
@@ -503,6 +515,17 @@ function OneGuild:HandleAddonMessage(prefix, message, channel, sender)
                 end
             end)
         end
+    elseif msgType == MSG_NOTE     then
+        self:ProcessNote(sender, data)
+    elseif msgType == MSG_NOTEDEL  then
+        self:ProcessNoteDel(sender, data)
+    elseif msgType == MSG_NOTEREQ  then
+        -- Someone requests notes — respond with our notes after random delay
+        C_Timer.After(math.random() * 3 + 1, function()
+            if OneGuild:IsAuthorized() then
+                OneGuild:BroadcastAllNotes()
+            end
+        end)
     elseif msgType == MSG_BYE      then
         if self.db and self.db.addonMembers and self.db.addonMembers[sender] then
             self.db.addonMembers[sender].online = false
@@ -1660,4 +1683,89 @@ function OneGuild:ProcessGlobalLM(sender, data)
     end
     -- Refresh UI if open
     if self.RefreshRaidGroups then self:RefreshRaidGroups() end
+end
+
+------------------------------------------------------------------------
+-- Guild Notes Sync
+-- Notes use unique IDs: "author-timestamp-random"
+-- Format: id|author|timestamp|text (pipe-separated)
+------------------------------------------------------------------------
+
+function OneGuild:BroadcastNote(note)
+    if not note or not note.id then return end
+    -- Escape pipes in text
+    local safeText = (note.text or ""):gsub("|", "%%PIPE%%")
+    local payload = table.concat({
+        note.id,
+        note.author or "?",
+        tostring(note.timestamp or 0),
+        safeText,
+    }, "|")
+    self:SendCommMessage(MSG_NOTE, payload)
+end
+
+function OneGuild:BroadcastNoteDel(noteId)
+    if not noteId then return end
+    self:SendCommMessage(MSG_NOTEDEL, noteId)
+end
+
+function OneGuild:BroadcastAllNotes(delay)
+    delay = delay or 0.5
+    if not self.db or not self.db.notes then return delay end
+    for _, note in ipairs(self.db.notes) do
+        if note.id then
+            local n = note -- capture
+            C_Timer.After(delay, function()
+                if OneGuild.BroadcastNote then OneGuild:BroadcastNote(n) end
+            end)
+            delay = delay + 0.3
+        end
+    end
+    return delay
+end
+
+function OneGuild:ProcessNote(sender, data)
+    if not data or not self.db then return end
+    if not self.db.notes then self.db.notes = {} end
+
+    local id, author, tsStr, safeText = strsplit("|", data, 4)
+    if not id or not safeText then return end
+
+    local text = safeText:gsub("%%PIPE%%", "|")
+    local ts = tonumber(tsStr) or 0
+
+    -- Check if note already exists (by ID)
+    for _, existing in ipairs(self.db.notes) do
+        if existing.id == id then
+            return -- already have it, skip
+        end
+    end
+
+    -- Add the note
+    table.insert(self.db.notes, {
+        id        = id,
+        author    = author or "?",
+        text      = text,
+        timestamp = ts,
+    })
+
+    self:Debug("Note empfangen von " .. sender .. ": " .. strsub(text, 1, 40))
+
+    -- Refresh notes UI if visible
+    if self.RefreshNotes then self:RefreshNotes() end
+end
+
+function OneGuild:ProcessNoteDel(sender, data)
+    if not data or not self.db or not self.db.notes then return end
+
+    for i = #self.db.notes, 1, -1 do
+        if self.db.notes[i].id == data then
+            table.remove(self.db.notes, i)
+            self:Debug("Note geloescht via Sync: " .. data)
+            break
+        end
+    end
+
+    -- Refresh notes UI if visible
+    if self.RefreshNotes then self:RefreshNotes() end
 end
