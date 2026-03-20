@@ -1787,15 +1787,21 @@ function OneGuild:BroadcastShopListing(listing)
     if not listing or not listing.id then return end
     local safeName = (listing.itemName or ""):gsub("|", "%%PIPE%%")
     local safeNote = (listing.note or ""):gsub("|", "%%PIPE%%")
+    local safeLink = (listing.itemLink or ""):gsub("|", "%%PIPE%%")
     local payload = table.concat({
         listing.id,
         listing.seller or "?",
         safeName,
-        listing.price or "Verhandelbar",
-        listing.currency or "Gold",
+        tostring(listing.goldPrice or 0),
+        tostring(listing.silverPrice or 0),
+        tostring(listing.copperPrice or 0),
         safeNote,
         tostring(listing.timestamp or 0),
         tostring(listing.expires or 0),
+        safeLink,
+        listing.itemIcon or "",
+        tostring(listing.itemIlvl or 0),
+        tostring(listing.itemQuality or 1),
     }, "|")
     self:SendCommMessage(MSG_SHOP, payload)
 end
@@ -1824,13 +1830,35 @@ function OneGuild:ProcessShopListing(sender, data)
     if not data or not self.db then return end
     if not self.db.shopListings then self.db.shopListings = {} end
 
-    local id, seller, safeName, price, currency, safeNote, tsStr, expStr = strsplit("|", data, 8)
+    local id, seller, safeName, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13 = strsplit("|", data, 13)
     if not id or not safeName then return end
 
     local itemName = safeName:gsub("%%PIPE%%", "|")
-    local note = (safeNote or ""):gsub("%%PIPE%%", "|")
-    local ts = tonumber(tsStr) or 0
-    local expires = tonumber(expStr) or 0
+
+    -- Detect new format (13 fields: gold/silver/copper) vs old (8 fields: price/currency)
+    local goldPrice, silverPrice, copperPrice = 0, 0, 0
+    local note, ts, expires = "", 0, 0
+    local itemLink, itemIcon, itemIlvl, itemQuality = nil, nil, 0, 1
+
+    if f13 then
+        -- New format: id|seller|name|gold|silver|copper|note|ts|exp|link|icon|ilvl|quality
+        goldPrice   = tonumber(f4) or 0
+        silverPrice = tonumber(f5) or 0
+        copperPrice = tonumber(f6) or 0
+        note        = (f7 or ""):gsub("%%PIPE%%", "|")
+        ts          = tonumber(f8) or 0
+        expires     = tonumber(f9) or 0
+        local rawLink = (f10 or ""):gsub("%%PIPE%%", "|")
+        if rawLink ~= "" then itemLink = rawLink end
+        if f11 and f11 ~= "" then itemIcon = f11 end
+        itemIlvl    = tonumber(f12) or 0
+        itemQuality = tonumber(f13) or 1
+    else
+        -- Old format: id|seller|name|price|currency|note|ts|exp
+        note    = (f6 or ""):gsub("%%PIPE%%", "|")
+        ts      = tonumber(f7) or 0
+        expires = tonumber(f8) or 0
+    end
 
     -- Skip expired
     if expires > 0 and expires < time() then return end
@@ -1843,16 +1871,19 @@ function OneGuild:ProcessShopListing(sender, data)
     end
 
     table.insert(self.db.shopListings, {
-        id        = id,
-        seller    = seller or "?",
-        itemName  = itemName,
-        itemLink  = nil,
-        itemIcon  = nil,
-        price     = price or "Verhandelbar",
-        currency  = currency or "Gold",
-        note      = note,
-        timestamp = ts,
-        expires   = expires,
+        id           = id,
+        seller       = seller or "?",
+        itemName     = itemName,
+        itemLink     = itemLink,
+        itemIcon     = itemIcon,
+        goldPrice    = goldPrice,
+        silverPrice  = silverPrice,
+        copperPrice  = copperPrice,
+        itemIlvl     = itemIlvl,
+        itemQuality  = itemQuality,
+        note         = note,
+        timestamp    = ts,
+        expires      = expires,
     })
 
     self:Debug("Shop-Listing empfangen von " .. sender .. ": " .. strsub(itemName, 1, 40))

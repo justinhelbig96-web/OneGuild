@@ -275,12 +275,20 @@ function OneGuild:ShowWelcomeScreen()
     changelogBody:SetWordWrap(true)
     changelogBody:SetSpacing(2)
     changelogBody:SetText(
+        "|cFFFFCC00v1.3.1|r\n" ..
+        "|cFF66FF66+|r Shop: Drag & Drop Items aus dem Inventar\n" ..
+        "|cFF66FF66+|r Shop: Preis in |cFFFFD700Gold|r / |cFFC0C0C0Silber|r / |cFFB87333Kupfer|r\n" ..
+        "|cFF66FF66+|r Shop: Item-Icon & Link in Angeboten\n" ..
+        "\n|cFFFFCC00v1.3.0|r\n" ..
+        "|cFF66FF66+|r Gilden-Shop: Items an Gildenmitglieder verkaufen\n" ..
+        "|cFF66FF66+|r Versteckte Auktions-Gebote (nur Auktionator sieht Details)\n" ..
+        "|cFF66FF66+|r Gilden-Notizen Sync an alle Online-Mitglieder\n" ..
+        "|cFF66FF66+|r DKP History: Loeschen & Export Buttons\n" ..
+        "\n|cFFFFCC00v1.2.x|r\n" ..
         "|cFF66FF66+|r DKP Bestaetigungsdialog vor jeder Aenderung\n" ..
-        "|cFF66FF66+|r Preset-Buttons fuellen nur das Textfeld (Anwenden bestaetigt)\n" ..
         "|cFF66FF66+|r Dual-Channel DKP Sync (GUILD + RAID/PARTY)\n" ..
-        "|cFF66FF66+|r Post-Distribution Verifikation (+15s / +30s)\n" ..
-        "|cFF66FF66+|r Farb-codiertes DKP Log im Chat (gruen/rot)\n" ..
         "|cFF66FF66+|r Triple-Send & Batch-Nachrichten fuer zuverlaessigen Sync\n" ..
+        "|cFF66FF66+|r Farb-codiertes DKP Log im Chat\n" ..
         "|cFF66FF66+|r 30s Auto-Sync fuer DKP Daten"
     )
     FadeIn(changelogBody, 2.1, 0.5)

@@ -278,10 +278,24 @@ function OneGuild:RefreshShop()
                 row.noteText:Hide()
             end
 
-            -- Price
-            local priceStr = listing.price or "Verhandelbar"
-            local curStr = listing.currency or ""
-            row.priceText:SetText("|cFFFFD700" .. priceStr .. " " .. curStr .. "|r")
+            -- Price (Gold / Silver / Copper)
+            local g = tonumber(listing.goldPrice) or 0
+            local s = tonumber(listing.silverPrice) or 0
+            local c = tonumber(listing.copperPrice) or 0
+            if g == 0 and s == 0 and c == 0 then
+                -- Legacy or negotiable
+                if listing.price and listing.price ~= "" and listing.price ~= "Verhandelbar" then
+                    row.priceText:SetText("|cFFFFD700" .. listing.price .. " " .. (listing.currency or "") .. "|r")
+                else
+                    row.priceText:SetText("|cFF888888Verhandelbar|r")
+                end
+            else
+                local parts = {}
+                if g > 0 then table.insert(parts, "|cFFFFD700" .. g .. "g|r") end
+                if s > 0 then table.insert(parts, "|cFFC0C0C0" .. s .. "s|r") end
+                if c > 0 then table.insert(parts, "|cFFB87333" .. c .. "c|r") end
+                row.priceText:SetText(table.concat(parts, " "))
+            end
 
             -- Seller
             row.sellerText:SetText("|cFF88AADD" .. ShortName(listing.seller or "?") .. "|r")
@@ -376,7 +390,7 @@ function OneGuild:ShowAddListingDialog()
 
     if not addListingFrame then
         local f = CreateFrame("Frame", "OneGuildAddListing", UIParent, "BackdropTemplate")
-        f:SetSize(380, 280)
+        f:SetSize(380, 380)
         f:SetPoint("CENTER")
         f:SetMovable(true)
         f:EnableMouse(true)
@@ -409,59 +423,106 @@ function OneGuild:ShowAddListingDialog()
         local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
         closeBtn:SetPoint("TOPRIGHT", -2, -2)
 
-        -- Item Name field
+        -- Item: Drag & Drop slot
         local itemLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         itemLabel:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -42)
-        itemLabel:SetText("|cFFAAAAAAItem Name:|r")
+        itemLabel:SetText("|cFFAAAAAAItem (Drag & Drop aus dem Inventar):|r")
 
-        local itemBox = CreateFrame("EditBox", nil, f, "BackdropTemplate")
-        itemBox:SetSize(340, 24)
-        itemBox:SetPoint("TOPLEFT", itemLabel, "BOTTOMLEFT", 0, -2)
-        itemBox:SetFontObject("ChatFontNormal")
-        itemBox:SetAutoFocus(false)
-        itemBox:SetMaxLetters(100)
-        itemBox:SetBackdrop({
+        local dropSlot = CreateFrame("Button", "OneGuildShopDropSlot", f, "BackdropTemplate")
+        dropSlot:SetSize(52, 52)
+        dropSlot:SetPoint("TOPLEFT", itemLabel, "BOTTOMLEFT", 0, -4)
+        dropSlot:RegisterForClicks("AnyUp")
+        dropSlot:SetBackdrop({
             bgFile   = "Interface\\Buttons\\WHITE8x8",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            edgeSize = 8,
-            insets   = { left = 4, right = 4, top = 2, bottom = 2 },
+            edgeSize = 10,
+            insets   = { left = 2, right = 2, top = 2, bottom = 2 },
         })
-        itemBox:SetBackdropColor(0.02, 0.02, 0.04, 0.9)
-        itemBox:SetBackdropBorderColor(0.3, 0.3, 0.5, 0.5)
-        itemBox:SetTextInsets(6, 6, 0, 0)
-        f.itemBox = itemBox
+        dropSlot:SetBackdropColor(0.06, 0.06, 0.12, 0.95)
+        dropSlot:SetBackdropBorderColor(0.4, 0.4, 0.6, 0.6)
 
-        -- Price field
+        local dropIcon = dropSlot:CreateTexture(nil, "ARTWORK")
+        dropIcon:SetSize(40, 40)
+        dropIcon:SetPoint("CENTER")
+        dropIcon:SetTexture("Interface\\PaperDoll\\UI-Backpack-EmptySlot")
+        f.dropIcon = dropIcon
+
+        local itemNameText = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        itemNameText:SetPoint("LEFT", dropSlot, "RIGHT", 10, 0)
+        itemNameText:SetWidth(260)
+        itemNameText:SetJustifyH("LEFT")
+        itemNameText:SetText("|cFF555555Drag & Drop|r")
+        f.itemNameText = itemNameText
+
+        local function HandleItemDrop()
+            local infoType, itemID, itemLink = GetCursorInfo()
+            if infoType == "item" then
+                ClearCursor()
+                local name, _, quality, ilvl, _, _, _, _, _, icon = C_Item.GetItemInfo(itemLink)
+                if not name then name, _, quality, ilvl, _, _, _, _, _, icon = GetItemInfo(itemLink) end
+                f.selectedItemLink = itemLink
+                f.selectedItemID   = itemID
+                f.selectedItemName = name or "Unbekannt"
+                f.selectedItemIcon = icon
+                f.selectedItemIlvl = ilvl or 0
+                f.selectedItemQuality = quality or 1
+                if icon then dropIcon:SetTexture(icon) end
+                itemNameText:SetText(itemLink or name or "?")
+            end
+        end
+
+        dropSlot:SetScript("OnReceiveDrag", HandleItemDrop)
+        dropSlot:SetScript("OnClick", HandleItemDrop)
+        f.dropSlot = dropSlot
+
+        -- Price: Gold / Silver / Copper
         local priceLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        priceLabel:SetPoint("TOPLEFT", itemBox, "BOTTOMLEFT", 0, -10)
-        priceLabel:SetText("|cFFAAAAAAPreis:|r")
+        priceLabel:SetPoint("TOPLEFT", dropSlot, "BOTTOMLEFT", 0, -10)
+        priceLabel:SetText("|cFFAAAAAAPreis (leer = Verhandelbar):|r")
 
-        local priceBox = CreateFrame("EditBox", nil, f, "BackdropTemplate")
-        priceBox:SetSize(160, 24)
-        priceBox:SetPoint("TOPLEFT", priceLabel, "BOTTOMLEFT", 0, -2)
-        priceBox:SetFontObject("ChatFontNormal")
-        priceBox:SetAutoFocus(false)
-        priceBox:SetMaxLetters(30)
-        priceBox:SetBackdrop({
-            bgFile   = "Interface\\Buttons\\WHITE8x8",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            edgeSize = 8,
-            insets   = { left = 4, right = 4, top = 2, bottom = 2 },
-        })
-        priceBox:SetBackdropColor(0.02, 0.02, 0.04, 0.9)
-        priceBox:SetBackdropBorderColor(0.3, 0.3, 0.5, 0.5)
-        priceBox:SetTextInsets(6, 6, 0, 0)
-        f.priceBox = priceBox
+        local function MakePriceBox(parent, w)
+            local eb = CreateFrame("EditBox", nil, parent, "BackdropTemplate")
+            eb:SetSize(w, 24)
+            eb:SetFontObject("ChatFontNormal")
+            eb:SetAutoFocus(false)
+            eb:SetMaxLetters(7)
+            eb:SetNumeric(true)
+            eb:SetBackdrop({
+                bgFile   = "Interface\\Buttons\\WHITE8x8",
+                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                edgeSize = 8,
+                insets   = { left = 4, right = 4, top = 2, bottom = 2 },
+            })
+            eb:SetBackdropColor(0.02, 0.02, 0.04, 0.9)
+            eb:SetBackdropBorderColor(0.3, 0.3, 0.5, 0.5)
+            eb:SetTextInsets(6, 6, 0, 0)
+            return eb
+        end
 
-        -- Currency dropdown-like label
-        local currLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        currLabel:SetPoint("LEFT", priceBox, "RIGHT", 10, 0)
-        currLabel:SetText("|cFFFFD700Gold|r")
-        f.currLabel = currLabel
+        local goldBox = MakePriceBox(f, 80)
+        goldBox:SetPoint("TOPLEFT", priceLabel, "BOTTOMLEFT", 0, -2)
+        f.goldBox = goldBox
+        local goldLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        goldLabel:SetPoint("LEFT", goldBox, "RIGHT", 4, 0)
+        goldLabel:SetText("|cFFFFD700g|r")
+
+        local silverBox = MakePriceBox(f, 60)
+        silverBox:SetPoint("LEFT", goldLabel, "RIGHT", 8, 0)
+        f.silverBox = silverBox
+        local silverLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        silverLabel:SetPoint("LEFT", silverBox, "RIGHT", 4, 0)
+        silverLabel:SetText("|cFFC0C0C0s|r")
+
+        local copperBox = MakePriceBox(f, 60)
+        copperBox:SetPoint("LEFT", silverLabel, "RIGHT", 8, 0)
+        f.copperBox = copperBox
+        local copperLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        copperLabel:SetPoint("LEFT", copperBox, "RIGHT", 4, 0)
+        copperLabel:SetText("|cFFB87333c|r")
 
         -- Duration field
         local durLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        durLabel:SetPoint("TOPLEFT", priceBox, "BOTTOMLEFT", 0, -10)
+        durLabel:SetPoint("TOPLEFT", goldBox, "BOTTOMLEFT", 0, -10)
         durLabel:SetText("|cFFAAAAAADauer (Stunden, leer = unbegrenzt):|r")
 
         local durBox = CreateFrame("EditBox", nil, f, "BackdropTemplate")
@@ -542,12 +603,24 @@ function OneGuild:ShowAddListingDialog()
     end
 
     -- Reset fields
-    addListingFrame.itemBox:SetText("")
-    addListingFrame.priceBox:SetText("")
+    addListingFrame.selectedItemLink = nil
+    addListingFrame.selectedItemID = nil
+    addListingFrame.selectedItemName = nil
+    addListingFrame.selectedItemIcon = nil
+    addListingFrame.selectedItemIlvl = nil
+    addListingFrame.selectedItemQuality = nil
+    if addListingFrame.dropIcon then
+        addListingFrame.dropIcon:SetTexture("Interface\\PaperDoll\\UI-Backpack-EmptySlot")
+    end
+    if addListingFrame.itemNameText then
+        addListingFrame.itemNameText:SetText("|cFF555555Drag & Drop|r")
+    end
+    addListingFrame.goldBox:SetText("")
+    addListingFrame.silverBox:SetText("")
+    addListingFrame.copperBox:SetText("")
     addListingFrame.durBox:SetText("")
     addListingFrame.noteBox:SetText("")
     addListingFrame:Show()
-    addListingFrame.itemBox:SetFocus()
 end
 
 ------------------------------------------------------------------------
@@ -557,14 +630,15 @@ function OneGuild:SubmitShopListing()
     local f = addListingFrame
     if not f then return end
 
-    local itemName = strtrim(f.itemBox:GetText() or "")
-    if itemName == "" then
-        self:PrintError("Bitte gib einen Item-Namen ein!")
+    local itemName = f.selectedItemName
+    if not itemName or itemName == "" then
+        self:PrintError("Bitte ziehe ein Item in das Feld (Drag & Drop)!")
         return
     end
 
-    local price = strtrim(f.priceBox:GetText() or "")
-    if price == "" then price = "Verhandelbar" end
+    local gold   = tonumber(f.goldBox:GetText() or "") or 0
+    local silver = tonumber(f.silverBox:GetText() or "") or 0
+    local copper = tonumber(f.copperBox:GetText() or "") or 0
 
     local durHours = tonumber(f.durBox:GetText() or "")
     local expires = 0
@@ -578,16 +652,19 @@ function OneGuild:SubmitShopListing()
     local listingId = ShortName(myName) .. "-" .. time() .. "-" .. math.random(1000, 9999)
 
     local listing = {
-        id        = listingId,
-        seller    = myName,
-        itemName  = itemName,
-        itemLink  = nil,  -- could be enhanced to support shift-click item links
-        itemIcon  = nil,  -- could try to look up
-        price     = price,
-        currency  = "Gold",
-        note      = note,
-        timestamp = time(),
-        expires   = expires,
+        id           = listingId,
+        seller       = myName,
+        itemName     = itemName,
+        itemLink     = f.selectedItemLink,
+        itemIcon     = f.selectedItemIcon,
+        goldPrice    = gold,
+        silverPrice  = silver,
+        copperPrice  = copper,
+        itemIlvl     = f.selectedItemIlvl or 0,
+        itemQuality  = f.selectedItemQuality or 1,
+        note         = note,
+        timestamp    = time(),
+        expires      = expires,
     }
 
     if not self.db.shopListings then self.db.shopListings = {} end
@@ -598,7 +675,7 @@ function OneGuild:SubmitShopListing()
         self:BroadcastShopListing(listing)
     end
 
-    self:PrintSuccess("Angebot eingestellt: " .. itemName)
+    self:PrintSuccess("Angebot eingestellt: " .. (f.selectedItemLink or itemName))
     f:Hide()
     self:RefreshShop()
     self:UpdateShopBadge()
