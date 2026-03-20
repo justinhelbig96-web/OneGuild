@@ -269,6 +269,13 @@ function OneGuild:ShowWelcomeScreen()
 
     -- Changelog data per version
     local changelogData = {
+        { version = "v1.4.0", entries = {
+            "Premium UI Effekte: Animierte Border-Shimmer",
+            "Gleitender Tab-Indikator mit Glow",
+            "Button Hover-Glow & Click-Flash Animationen",
+            "Goldene Partikel-Effekte im Hintergrund",
+            "Automatisches Dialog-Styling",
+        }},
         { version = "v1.3.1", entries = {
             "Shop: Drag & Drop Items aus dem Inventar",
             "Shop: Preis in Gold / Silber / Kupfer",
@@ -282,9 +289,6 @@ function OneGuild:ShowWelcomeScreen()
         }},
         { version = "v1.2.9", entries = {
             "Gilden-Notizen: Echtzeit-Broadcast an alle Online-Mitglieder",
-        }},
-        { version = "v1.2.8", entries = {
-            "DKP History: Loeschen & Export (Copy-Window)",
         }},
         { version = "v1.2.x", entries = {
             "DKP Bestaetigungsdialog vor jeder Aenderung",

@@ -18,7 +18,7 @@ OneGuild.REQUIRED_GUILD = "One"
 ------------------------------------------------------------------------
 -- Version & Constants
 ------------------------------------------------------------------------
-OneGuild.VERSION = "1.3.2"
+OneGuild.VERSION = "1.4.0"
 
 ------------------------------------------------------------------------
 -- Admin Whitelist  –  now loaded from SavedVariables (db.settings.whitelist)

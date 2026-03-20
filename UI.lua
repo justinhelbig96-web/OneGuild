@@ -574,6 +574,18 @@ function OneGuild:BuildMainFrame()
     if self.BuildCharactersTab then self:BuildCharactersTab() end
     if self.BuildShopTab then self:BuildShopTab() end
 
+    -- Apply premium visual effects to all tab content
+    if self.FX then
+        C_Timer.After(0.2, function()
+            -- Style action buttons in each tab with appropriate themes
+            for i, tabFrame in ipairs(OneGuild.tabFrames) do
+                if tabFrame then
+                    OneGuild.FX:StyleChildButtons(tabFrame, "gold", 3)
+                end
+            end
+        end)
+    end
+
     -- Show first tab
     self:ShowTab(1)
 

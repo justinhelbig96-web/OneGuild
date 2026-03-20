@@ -199,6 +199,17 @@ function OneGuild:BuildShopTab()
 
         row:Hide()
         shopRows[i] = row
+
+        -- Apply premium effects
+        if OneGuild.FX then
+            OneGuild.FX:RowHover(row, 0.3, 0.4, 0.6)
+            OneGuild.FX:StyleButton(row.buyBtn, "blue")
+        end
+    end
+
+    -- Style the add button
+    if OneGuild.FX then
+        OneGuild.FX:StyleButton(addBtn, "green")
     end
 
     -- Fix scroll width after layout
