@@ -1627,6 +1627,7 @@ function OneGuild:ShowDKPDistribution()
     local histBtnText = histBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     histBtnText:SetPoint("CENTER")
     histBtnText:SetText("|cFF9999FFHistorie|r")
+    histBtn:RegisterForClicks("AnyUp")
     histBtn:SetScript("OnClick", function() OneGuild:ShowDKPHistory() end)
     histBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(0.2, 0.14, 0.4, 1) end)
     histBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(0.12, 0.08, 0.25, 0.9) end)
@@ -1873,8 +1874,10 @@ function OneGuild:ShowDKPDistribution()
         local color = isNeg and "|cFFFF6666" or "|cFF66FF66"
         btnText:SetText(color .. prefix .. tostring(val) .. "|r")
 
+        btn:RegisterForClicks("AnyUp")
         btn:SetScript("OnClick", function()
-            customBox:SetText(tostring(val))
+            local current = tonumber(customBox:GetText()) or 0
+            customBox:SetText(tostring(current + val))
         end)
         btn:SetScript("OnEnter", function(self)
             self:SetBackdropColor(isNeg and 0.55 or 0.15, isNeg and 0.15 or 0.45, 0.15, 1)
@@ -1905,6 +1908,7 @@ function OneGuild:ShowDKPDistribution()
     local applyText = applyBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     applyText:SetPoint("CENTER")
     applyText:SetText("|cFFFFD700Anwenden|r")
+    applyBtn:RegisterForClicks("AnyUp")
     applyBtn:SetScript("OnClick", function()
         local val = tonumber(customBox:GetText())
         if val and val ~= 0 then
@@ -2221,8 +2225,8 @@ function OneGuild:ShowDKPHistory()
     f:SetMovable(true)
     f:EnableMouse(true)
     f:SetClampedToScreen(true)
-    f:SetFrameStrata("DIALOG")
-    f:SetFrameLevel(210)
+    f:SetFrameStrata("FULLSCREEN_DIALOG")
+    f:SetFrameLevel(250)
     f:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
