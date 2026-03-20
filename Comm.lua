@@ -1875,7 +1875,12 @@ function OneGuild:ProcessShopDel(sender, data)
 
     if self.RefreshShop then self:RefreshShop() end
     if self.UpdateShopBadge then self:UpdateShopBadge() end
-endfunction OneGuild:ProcessNoteDel(sender, data)
+end
+
+------------------------------------------------------------------------
+-- Process Note Deletion
+------------------------------------------------------------------------
+function OneGuild:ProcessNoteDel(sender, data)
     if not data or not self.db or not self.db.notes then return end
 
     for i = #self.db.notes, 1, -1 do
