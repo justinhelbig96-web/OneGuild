@@ -9,10 +9,10 @@ local _, OneGuild = ...
 ------------------------------------------------------------------------
 -- Constants
 ------------------------------------------------------------------------
-local FRAME_WIDTH  = 700
-local FRAME_HEIGHT = 520
-local TAB_HEIGHT   = 30
-local HEADER_H     = 60
+local FRAME_WIDTH  = 780
+local FRAME_HEIGHT = 580
+local TAB_HEIGHT   = 32
+local HEADER_H     = 80
 
 local TAB_NAMES = { "Mitglieder", "Events", "Raid", "DKP Loot", "Notizen", "Charaktere" }
 
@@ -48,8 +48,31 @@ function OneGuild:BuildMainFrame()
         edgeSize = 14,
         insets   = { left = 3, right = 3, top = 3, bottom = 3 },
     })
-    f:SetBackdropColor(0.08, 0.04, 0.04, 0.97)
+    f:SetBackdropColor(0.06, 0.03, 0.03, 0.98)
     f:SetBackdropBorderColor(0.7, 0.5, 0.1, 0.8)
+
+    -- Top accent glow line
+    local accentGlow = f:CreateTexture(nil, "ARTWORK", nil, 3)
+    accentGlow:SetHeight(2)
+    accentGlow:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -4)
+    accentGlow:SetPoint("TOPRIGHT", f, "TOPRIGHT", -4, -4)
+    accentGlow:SetColorTexture(0.9, 0.6, 0.1, 0.8)
+    -- Pulse animation for top accent
+    local accentPulse = accentGlow:CreateAnimationGroup()
+    local fadeOut = accentPulse:CreateAnimation("Alpha")
+    fadeOut:SetFromAlpha(0.9)
+    fadeOut:SetToAlpha(0.3)
+    fadeOut:SetDuration(2.0)
+    fadeOut:SetOrder(1)
+    fadeOut:SetSmoothing("IN_OUT")
+    local fadeIn = accentPulse:CreateAnimation("Alpha")
+    fadeIn:SetFromAlpha(0.3)
+    fadeIn:SetToAlpha(0.9)
+    fadeIn:SetDuration(2.0)
+    fadeIn:SetOrder(2)
+    fadeIn:SetSmoothing("IN_OUT")
+    accentPulse:SetLooping("REPEAT")
+    accentPulse:Play()
 
     -- Title bar drag
     local titleBar = CreateFrame("Frame", nil, f)
@@ -61,9 +84,37 @@ function OneGuild:BuildMainFrame()
     titleBar:SetScript("OnDragStart", function() f:StartMoving() end)
     titleBar:SetScript("OnDragStop", function() f:StopMovingOrSizing() end)
 
-    -- Title text
-    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -14)
+    -- Guild logo (left side of header)
+    local logo = f:CreateTexture(nil, "ARTWORK", nil, 2)
+    logo:SetSize(64, 64)
+    logo:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -8)
+    logo:SetTexture("Interface\\AddOns\\OneGuild\\logo")
+    -- Subtle breathing glow on logo
+    local logoGlow = f:CreateTexture(nil, "ARTWORK", nil, 1)
+    logoGlow:SetSize(76, 76)
+    logoGlow:SetPoint("CENTER", logo, "CENTER", 0, 0)
+    logoGlow:SetTexture("Interface\\Buttons\\WHITE8x8")
+    logoGlow:SetVertexColor(0.9, 0.6, 0.1, 0.08)
+    local logoBreath = logoGlow:CreateAnimationGroup()
+    local lbOut = logoBreath:CreateAnimation("Alpha")
+    lbOut:SetFromAlpha(0.12)
+    lbOut:SetToAlpha(0.02)
+    lbOut:SetDuration(3.0)
+    lbOut:SetOrder(1)
+    lbOut:SetSmoothing("IN_OUT")
+    local lbIn = logoBreath:CreateAnimation("Alpha")
+    lbIn:SetFromAlpha(0.02)
+    lbIn:SetToAlpha(0.12)
+    lbIn:SetDuration(3.0)
+    lbIn:SetOrder(2)
+    lbIn:SetSmoothing("IN_OUT")
+    logoBreath:SetLooping("REPEAT")
+    logoBreath:Play()
+
+    -- Title text (larger, next to logo)
+    local title = f:CreateFontString(nil, "OVERLAY")
+    title:SetFont("Fonts\\FRIZQT__.TTF", 18, "OUTLINE")
+    title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 10, -4)
     title:SetText(OneGuild.COLORS.TITLE .. "OneGuild|r  " ..
         OneGuild.COLORS.MUTED .. "v" .. OneGuild.VERSION .. "|r")
     f.titleText = title
@@ -141,7 +192,8 @@ function OneGuild:BuildMainFrame()
     end
 
     -- Guild name subtitle
-    local subtitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local subtitle = f:CreateFontString(nil, "OVERLAY")
+    subtitle:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
     subtitle:SetText(OneGuild.COLORS.GUILD .. "<" .. (OneGuild.playerGuild or OneGuild.REQUIRED_GUILD) .. ">|r")
 
@@ -151,6 +203,81 @@ function OneGuild:BuildMainFrame()
     credit:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -1)
     credit:SetTextColor(0.55, 0.45, 0.33, 0.8)
     credit:SetText("Created by Icy_Veins")
+
+    -- ===== SYNC PROGRESS BAR (bottom of header) =====
+    local syncBarBg = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    syncBarBg:SetHeight(6)
+    syncBarBg:SetPoint("BOTTOMLEFT", titleBar, "BOTTOMLEFT", 10, 2)
+    syncBarBg:SetPoint("BOTTOMRIGHT", titleBar, "BOTTOMRIGHT", -10, 2)
+    syncBarBg:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 4,
+        insets   = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    syncBarBg:SetBackdropColor(0.03, 0.02, 0.02, 0.8)
+    syncBarBg:SetBackdropBorderColor(0.3, 0.2, 0.05, 0.4)
+
+    local syncBarFill = syncBarBg:CreateTexture(nil, "ARTWORK")
+    syncBarFill:SetHeight(4)
+    syncBarFill:SetPoint("TOPLEFT", syncBarBg, "TOPLEFT", 1, -1)
+    syncBarFill:SetColorTexture(0.4, 0.7, 0.2, 0.9)
+    syncBarFill:SetWidth(1)
+    f.syncBarFill = syncBarFill
+    f.syncBarBg = syncBarBg
+
+    -- Glow effect on the leading edge of progress bar
+    local syncBarGlow = syncBarBg:CreateTexture(nil, "OVERLAY")
+    syncBarGlow:SetSize(12, 10)
+    syncBarGlow:SetPoint("RIGHT", syncBarFill, "RIGHT", 4, 0)
+    syncBarGlow:SetTexture("Interface\\Buttons\\WHITE8x8")
+    syncBarGlow:SetVertexColor(0.5, 1, 0.3, 0.6)
+    f.syncBarGlow = syncBarGlow
+
+    -- Sync label (tiny, on the right)
+    local syncBarLabel = syncBarBg:CreateFontString(nil, "OVERLAY")
+    syncBarLabel:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
+    syncBarLabel:SetPoint("RIGHT", syncBarBg, "RIGHT", 0, 8)
+    syncBarLabel:SetText("")
+    f.syncBarLabel = syncBarLabel
+
+    -- Timer to animate the sync progress bar
+    local DKP_SYNC_SEC = 30
+    local syncStartTime = GetTime()
+    f.syncStartTime = syncStartTime
+
+    local syncTicker = C_Timer.NewTicker(0.05, function()
+        if not f or not f:IsShown() then return end
+        local elapsed = GetTime() - (f.syncStartTime or syncStartTime)
+        local progress = math.min(elapsed / DKP_SYNC_SEC, 1.0)
+        local barWidth = math.max(1, (syncBarBg:GetWidth() - 2) * progress)
+        syncBarFill:SetWidth(barWidth)
+
+        -- Color transition: green -> gold -> briefly flash on reset
+        if progress < 0.7 then
+            syncBarFill:SetColorTexture(0.2 + 0.3 * progress, 0.7 - 0.2 * progress, 0.2, 0.9)
+            syncBarGlow:SetVertexColor(0.3 + 0.4 * progress, 1 - 0.3 * progress, 0.3, 0.6)
+        else
+            syncBarFill:SetColorTexture(0.7, 0.5, 0.1, 0.9)
+            syncBarGlow:SetVertexColor(1, 0.7, 0.2, 0.8)
+        end
+
+        local remaining = math.max(0, math.ceil(DKP_SYNC_SEC - elapsed))
+        syncBarLabel:SetText("|cFF666655Sync: " .. remaining .. "s|r")
+
+        if progress >= 1.0 then
+            f.syncStartTime = GetTime()
+            -- Flash white briefly
+            syncBarFill:SetColorTexture(1, 1, 1, 0.8)
+            C_Timer.After(0.15, function()
+                if syncBarFill then syncBarFill:SetColorTexture(0.4, 0.7, 0.2, 0.9) end
+            end)
+        end
+    end)
+    f.syncTicker = syncTicker
+
+    -- Reset bar on manual sync too
+    local origSyncOnClick -- will be set after syncBtn is created
 
     -- Close button
     local closeBtn = CreateFrame("Button", nil, titleBar, "UIPanelCloseButton")
@@ -223,6 +350,11 @@ function OneGuild:BuildMainFrame()
     syncBtn:SetScript("OnClick", function()
         if isSyncing then return end
         isSyncing = true
+
+        -- Reset sync progress bar
+        if f.syncStartTime then
+            f.syncStartTime = GetTime()
+        end
 
         -- Start spinning animation (gear icon)
         syncIcon:SetTexture("Interface\\Icons\\INV_Misc_Gear_01")

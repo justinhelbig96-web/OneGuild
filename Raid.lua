@@ -1612,8 +1612,8 @@ function OneGuild:ShowDKPDistribution()
     closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
     closeBtn:SetScript("OnClick", function() f:Hide() end)
 
-    -- Historie button in title bar
-    local histBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
+    -- Historie button in title bar (MUST be child of tb so clicks aren't eaten)
+    local histBtn = CreateFrame("Button", nil, tb, "BackdropTemplate")
     histBtn:SetSize(80, 22)
     histBtn:SetPoint("RIGHT", closeBtn, "LEFT", -4, 0)
     histBtn:SetBackdrop({
@@ -2293,6 +2293,13 @@ function OneGuild:ShowDKPHistory()
     listArea:SetBackdropBorderColor(0.3, 0.2, 0.4, 0.4)
     f.listArea = listArea
 
+    -- Empty state message
+    local emptyMsg = listArea:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    emptyMsg:SetPoint("CENTER", listArea, "CENTER", 0, 0)
+    emptyMsg:SetText("|cFF666666Noch keine DKP Historie vorhanden.\nVerteile DKP um Eintraege zu sehen.|r")
+    emptyMsg:SetJustifyH("CENTER")
+    f.emptyMsg = emptyMsg
+
     local scrollContent = CreateFrame("Frame", nil, listArea)
     scrollContent:SetPoint("TOPLEFT", listArea, "TOPLEFT", 4, -4)
     scrollContent:SetPoint("BOTTOMRIGHT", listArea, "BOTTOMRIGHT", -4, 4)
@@ -2324,6 +2331,15 @@ function OneGuild:RefreshDKPHistory()
     local scroll = f.scrollContent
 
     local history = (self.db and self.db.dkpHistory) or {}
+
+    -- Show/hide empty state
+    if f.emptyMsg then
+        if #history == 0 then
+            f.emptyMsg:Show()
+        else
+            f.emptyMsg:Hide()
+        end
+    end
 
     -- Show newest first (reverse)
     local sorted = {}
