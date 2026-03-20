@@ -47,6 +47,7 @@ local MSG_SHOP     = "SH"           -- shop listing (create/sync)
 local MSG_SHOPDEL  = "SHD"          -- shop listing deleted
 local MSG_SHOPREQ  = "SHR"          -- request all shop listings
 local MSG_CHUNK    = "CK"           -- auto-chunked message (payload > 250 bytes)
+local MSG_PERM     = "PM"           -- DKP permission setting sync
 
 local DKP_SYNC_INTERVAL = 30         -- DKP-only auto-sync every 30 seconds
 local DKP_TRIPLE_DELAYS = { 0, 3, 8 } -- triple-send delays for reliability
@@ -261,6 +262,8 @@ function OneGuild:FullSync()
     delay = self:BroadcastAllDKP(delay)
     -- whitelist
     delay = self:BroadcastWhitelist(delay)
+    -- dkp permission
+    delay = self:BroadcastPermission(delay)
     -- tombstones (deleted raids/events)
     delay = self:BroadcastTombstones(delay)
     -- guild notes
@@ -595,6 +598,8 @@ function OneGuild:HandleAddonMessage(prefix, message, channel, sender)
                 OneGuild:BroadcastAllShopListings()
             end
         end)
+    elseif msgType == MSG_PERM      then
+        self:ProcessPermission(sender, data)
     elseif msgType == MSG_BYE      then
         if self.db and self.db.addonMembers and self.db.addonMembers[sender] then
             self.db.addonMembers[sender].online = false
@@ -1369,6 +1374,79 @@ function OneGuild:ProcessWhitelistSync(sender, data)
     self.db.settings.whitelist = newWL
     self:LoadWhitelistFromDB()
     self:Debug("Whitelist aktualisiert von " .. sender .. ": " .. (data or "(leer)"))
+end
+
+------------------------------------------------------------------------
+-- BroadcastPermission  -- send dkpPermission as part of FullSync
+------------------------------------------------------------------------
+function OneGuild:BroadcastPermission(startDelay)
+    local delay = startDelay or 0
+    if not self.db or not self.db.settings then return delay end
+    local perm = self.db.settings.dkpPermission or "officer"
+    delay = delay + 0.2
+    C_Timer.After(delay, function()
+        if not OneGuild:IsAuthorized() then return end
+        OneGuild:SendCommMessage(MSG_PERM, perm)
+    end)
+    return delay
+end
+
+------------------------------------------------------------------------
+-- SendPermissionSync  -- send dkpPermission immediately (called on change)
+------------------------------------------------------------------------
+function OneGuild:SendPermissionSync()
+    if not self.db or not self.db.settings then return end
+    local perm = self.db.settings.dkpPermission or "officer"
+    self:SendCommMessage(MSG_PERM, perm)
+end
+
+------------------------------------------------------------------------
+-- ProcessPermission  -- receive dkpPermission from an officer/leader
+------------------------------------------------------------------------
+function OneGuild:ProcessPermission(sender, data)
+    if not self.db or not self.db.settings then return end
+    if not data or data == "" then return end
+
+    -- Only accept permission changes from rank 0 or rank 1
+    local senderShort = strsplit("-", sender)
+    local trusted = false
+    if IsInGuild() then
+        local numGuild = GetNumGuildMembers() or 0
+        for i = 1, numGuild do
+            local gName, _, rankIdx = GetGuildRosterInfo(i)
+            if gName then
+                local gs = strsplit("-", gName)
+                if gs == senderShort or gName == sender then
+                    if rankIdx <= 1 then trusted = true end
+                    break
+                end
+            end
+        end
+    end
+    -- Also trust ourselves
+    local myName = UnitName("player") or ""
+    if senderShort == myName then trusted = true end
+
+    -- Also trust whitelist members
+    if OneGuild:IsOnWhitelist(senderShort) then trusted = true end
+
+    if not trusted then
+        self:Debug("Permission sync abgelehnt von: " .. sender)
+        return
+    end
+
+    -- Validate value
+    local valid = { leader = true, officer = true, raidlead = true, all = true }
+    if not valid[data] then
+        self:Debug("Permission sync: ungueltiger Wert: " .. tostring(data))
+        return
+    end
+
+    local old = self.db.settings.dkpPermission or "officer"
+    if old ~= data then
+        self.db.settings.dkpPermission = data
+        self:Debug("DKP-Berechtigung aktualisiert von " .. sender .. ": " .. data)
+    end
 end
 
 ------------------------------------------------------------------------

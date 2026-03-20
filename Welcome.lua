@@ -269,6 +269,11 @@ function OneGuild:ShowWelcomeScreen()
 
     -- Changelog data per version
     local changelogData = {
+        { version = "v1.4.5", entries = {
+            "FIX: DKP-Verteilung zeigt nur Raidgruppen-Spieler",
+            "FIX: Manuelles DKP-Bearbeiten respektiert Berechtigungen",
+            "FIX: Berechtigungen werden jetzt an Gilde synchronisiert",
+        }},
         { version = "v1.4.4", entries = {
             "FIX: Drag & Drop in Raidgruppen repariert",
             "FIX: Addon-Check funktioniert jetzt auch in Gruppen",

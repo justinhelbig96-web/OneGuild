@@ -381,6 +381,15 @@ local function BuildPermissionsTab(content)
             OneGuild.db.settings.dkpPermission = opt.value
             currentPerm = opt.value
             OneGuild:PrintSuccess("DKP-Berechtigung ge\195\164ndert: " .. opt.label)
+            -- Broadcast permission change to guild (double-send for reliability)
+            if OneGuild.SendPermissionSync then
+                OneGuild:SendPermissionSync()
+                C_Timer.After(3, function()
+                    if OneGuild:IsAuthorized() then
+                        OneGuild:SendPermissionSync()
+                    end
+                end)
+            end
         end)
 
         table.insert(permRadioButtons, { btn = radioBtn, value = opt.value })

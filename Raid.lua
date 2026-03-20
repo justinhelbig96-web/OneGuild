@@ -1928,7 +1928,7 @@ function OneGuild:RefreshDKPDistribution()
     if not dkpDistFrame or not dkpDistFrame:IsShown() then return end
     local f = dkpDistFrame
 
-    -- Collect all players: from global groups + all raid signups
+    -- Collect all players: from global raid groups only
     local players = {}   -- { name = "short", fullName = "Full-Realm", group = g or nil, dkp = n }
     local seen = {}
 
@@ -1949,31 +1949,6 @@ function OneGuild:RefreshDKPDistribution()
                         group    = g,
                         dkp      = dkp,
                     })
-                end
-            end
-        end
-    end
-
-    -- From all raid signups (not yet grouped)
-    if self.db and self.db.raids then
-        for _, rd in ipairs(self.db.raids) do
-            if rd.signups then
-                for sName, sData in pairs(rd.signups) do
-                    local st = type(sData) == "table" and sData.status or sData
-                    if st and st ~= "declined" and st ~= "withdrawn" and st ~= "none" then
-                        local short = strsplit("-", sName)
-                        if not seen[sName] and not seen[short] then
-                            seen[sName] = true
-                            seen[short] = true
-                            local dkp = self:GetDKPForPlayer(sName)
-                            table.insert(players, {
-                                name     = short,
-                                fullName = sName,
-                                group    = nil,
-                                dkp      = dkp,
-                            })
-                        end
-                    end
                 end
             end
         end

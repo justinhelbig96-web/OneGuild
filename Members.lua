@@ -275,8 +275,8 @@ local function BuildDisplayList(members)
         table.insert(list, { type = "member", data = member })
 
         if expandedKeys[member.sender] then
-            -- If admin, show DKP editor row first
-            if OneGuild.isAdmin then
+            -- If allowed to edit DKP, show DKP editor row first
+            if OneGuild:CanEditDKP() then
                 table.insert(list, { type = "dkp_edit", data = member })
             end
 
