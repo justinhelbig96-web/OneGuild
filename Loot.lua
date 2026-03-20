@@ -213,27 +213,46 @@ end
 
 --- Start addon check (RL/Assist only)
 function OneGuild:StartAddonCheck()
-    if not IsInRaid() then
-        self:PrintError("Du bist nicht in einem Raid!")
+    if not IsInRaid() and not IsInGroup() then
+        self:PrintError("Du bist nicht in einer Gruppe oder einem Raid!")
         return
     end
 
     -- Allow RL, Assist, or Whitelist users
     local myName = UnitName("player") or ""
-    local allowed = IsRaidLeader() or IsRaidAssist()
+    local allowed = false
+    if IsInRaid() then
+        allowed = IsRaidLeader() or IsRaidAssist()
+    else
+        allowed = UnitIsGroupLeader("player")
+    end
     if not allowed and self:IsOnWhitelist(myName) then
         allowed = true
     end
     if not allowed then
-        self:PrintError("Nur der Raid Leader, Assistent oder Admin kann den Addon-Check starten!")
+        self:PrintError("Nur der Gruppen-/Raid Leader, Assistent oder Admin kann den Addon-Check starten!")
         return
     end
 
     lootCheckResults = {}
     lootCheckInProgress = true
 
-    -- Build list of all raid members
+    -- Build list of all group/raid members
     local raidMembers = GetRaidMemberList()
+    -- If GetRaidMemberList returned empty (maybe party), build from party units
+    local hasMember = false
+    for _ in pairs(raidMembers) do hasMember = true; break end
+    if not hasMember and IsInGroup() then
+        local realm = GetNormalizedRealmName() or GetRealmName() or ""
+        for i = 1, GetNumGroupMembers() - 1 do
+            local uName = UnitName("party" .. i)
+            if uName then
+                raidMembers[uName .. "-" .. realm] = true
+            end
+        end
+        local myN = UnitName("player")
+        if myN then raidMembers[myN .. "-" .. realm] = true end
+    end
     for name, _ in pairs(raidMembers) do
         lootCheckResults[name] = {
             version   = nil,
@@ -248,8 +267,13 @@ function OneGuild:StartAddonCheck()
         lootCheckResults[myFull].responded = true
     end
 
-    -- Send check request
+    -- Send check request (dual-channel: GUILD + RAID/PARTY for reliability)
     self:SendCommMessage("LCK", OneGuild.VERSION)
+    if IsInRaid() then
+        C_ChatInfo.SendAddonMessage("OGuild1", "LCK:" .. OneGuild.VERSION, "RAID")
+    elseif IsInGroup() then
+        C_ChatInfo.SendAddonMessage("OGuild1", "LCK:" .. OneGuild.VERSION, "PARTY")
+    end
 
     -- Show results window
     self:ShowAddonCheckWindow()
@@ -266,9 +290,14 @@ end
 
 --- Handle incoming LCK (check request)
 function OneGuild:HandleLootCheckRequest(sender, data)
-    if not IsInRaid() then return end
-    -- Reply with our version
+    if not IsInRaid() and not IsInGroup() then return end
+    -- Reply with our version (dual-channel for reliability)
     self:SendCommMessage("LCR", OneGuild.VERSION)
+    if IsInRaid() then
+        C_ChatInfo.SendAddonMessage("OGuild1", "LCR:" .. OneGuild.VERSION, "RAID")
+    elseif IsInGroup() then
+        C_ChatInfo.SendAddonMessage("OGuild1", "LCR:" .. OneGuild.VERSION, "PARTY")
+    end
     self:Debug("Loot-Check: Anfrage von " .. sender .. " beantwortet (v" .. OneGuild.VERSION .. ")")
 end
 

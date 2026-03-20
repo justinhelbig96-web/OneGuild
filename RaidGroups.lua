@@ -200,8 +200,8 @@ local function StartDrag(playerName, classFile)
     df:Show()
 end
 
-local function StopDrag()
-    if dragPlayerName then
+local function StopDrag(skipPlacement)
+    if dragPlayerName and not skipPlacement then
         -- Check individual cells first for slot-specific placement
         for g = 1, MAX_GROUPS do
             local panel = groupPanels[g]
@@ -570,8 +570,9 @@ function OneGuild:BuildRaidGroupsFrame()
         gf.groupIndex = g
         gf:SetScript("OnMouseUp", function(self, btn)
             if btn == "LeftButton" and dragPlayerName then
-                MoveToGroup(dragPlayerName, self.groupIndex)
-                StopDrag()
+                local name = dragPlayerName
+                StopDrag(true)  -- skip placement
+                MoveToGroup(name, self.groupIndex)
             end
         end)
 
@@ -621,15 +622,17 @@ function OneGuild:BuildRaidGroupsFrame()
                 end
             end)
             cell:SetScript("OnDragStop", function()
-                StopDrag()
+                -- Defer by 1 frame so OnMouseUp on target fires first
+                C_Timer.After(0, function() StopDrag() end)
             end)
 
             -- Drop on cell = move to this group at this slot
             cell.slotIndex = s
             cell:SetScript("OnMouseUp", function(self, btn)
                 if btn == "LeftButton" and dragPlayerName then
-                    MoveToGroup(dragPlayerName, g, self.slotIndex)
-                    StopDrag()
+                    local name = dragPlayerName
+                    StopDrag(true)  -- skip placement (we do it here)
+                    MoveToGroup(name, g, self.slotIndex)
                 end
             end)
 
@@ -669,8 +672,9 @@ function OneGuild:BuildRaidGroupsFrame()
     rosterPanel:EnableMouse(true)
     rosterPanel:SetScript("OnMouseUp", function(self, btn)
         if btn == "LeftButton" and dragPlayerName then
-            RemoveFromGroup(dragPlayerName)
-            StopDrag()
+            local name = dragPlayerName
+            StopDrag(true)  -- skip placement
+            RemoveFromGroup(name)
         end
     end)
     rosterPanel:SetScript("OnEnter", function(self)
@@ -946,7 +950,7 @@ function OneGuild:RefreshRaidGroups()
                 end
             end)
             cell:SetScript("OnDragStop", function()
-                StopDrag()
+                C_Timer.After(0, function() StopDrag() end)
             end)
             cell:SetScript("OnEnter", function(self)
                 self.bg:SetColorTexture(0.18, 0.1, 0.05, 0.7)

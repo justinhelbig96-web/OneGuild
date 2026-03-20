@@ -269,6 +269,11 @@ function OneGuild:ShowWelcomeScreen()
 
     -- Changelog data per version
     local changelogData = {
+        { version = "v1.4.4", entries = {
+            "FIX: Drag & Drop in Raidgruppen repariert",
+            "FIX: Addon-Check funktioniert jetzt auch in Gruppen",
+            "Addon-Check Dual-Channel (zuverlaessiger)",
+        }},
         { version = "v1.4.3", entries = {
             "FIX: Notizen & Shop-Sync zuverlaessiger",
             "Doppel-Versand bei neuen Eintraegen",
