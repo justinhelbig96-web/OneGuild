@@ -1817,50 +1817,9 @@ function OneGuild:ShowDKPDistribution()
     amountLabel:SetPoint("LEFT", bottomBar, "LEFT", 14, 12)
     amountLabel:SetText("|cFFDDB866DKP-Betrag:|r")
 
-    -- Preset buttons
-    local presets = { -20, -10, 10, 20, 50 }
-    local presetBtns = {}
-    local prevAnchor = amountLabel
-
-    for _, val in ipairs(presets) do
-        local btn = CreateFrame("Button", nil, bottomBar, "BackdropTemplate")
-        btn:SetSize(42, 24)
-        btn:SetPoint("LEFT", prevAnchor, "RIGHT", 4, 0)
-        btn:SetBackdrop({
-            bgFile   = "Interface\\Buttons\\WHITE8x8",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            edgeSize = 6,
-            insets   = { left = 1, right = 1, top = 1, bottom = 1 },
-        })
-
-        local isNeg = val < 0
-        btn:SetBackdropColor(isNeg and 0.4 or 0.1, isNeg and 0.1 or 0.35, 0.1, 0.9)
-        btn:SetBackdropBorderColor(isNeg and 0.7 or 0.3, isNeg and 0.2 or 0.6, isNeg and 0.2 or 0.3, 0.6)
-
-        local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        btnText:SetPoint("CENTER")
-        local prefix = val > 0 and "+" or ""
-        local color = isNeg and "|cFFFF6666" or "|cFF66FF66"
-        btnText:SetText(color .. prefix .. tostring(val) .. "|r")
-
-        btn:SetScript("OnClick", function()
-            OneGuild:ApplyDKPToSelected(val)
-        end)
-        btn:SetScript("OnEnter", function(self)
-            self:SetBackdropColor(isNeg and 0.55 or 0.15, isNeg and 0.15 or 0.45, 0.15, 1)
-        end)
-        btn:SetScript("OnLeave", function(self)
-            self:SetBackdropColor(isNeg and 0.4 or 0.1, isNeg and 0.1 or 0.35, 0.1, 0.9)
-        end)
-
-        table.insert(presetBtns, btn)
-        prevAnchor = btn
-    end
-
-    -- Custom amount box
+    -- Custom amount box (created early so preset buttons can reference it)
     local customBox = CreateFrame("EditBox", nil, bottomBar, "BackdropTemplate")
     customBox:SetSize(50, 24)
-    customBox:SetPoint("LEFT", prevAnchor, "RIGHT", 8, 0)
     customBox:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -1887,6 +1846,49 @@ function OneGuild:ShowDKPDistribution()
         end
         self:ClearFocus()
     end)
+
+    -- Preset buttons (fill customBox, don't apply directly)
+    local presets = { -20, -10, 10, 20, 50 }
+    local presetBtns = {}
+    local prevAnchor = amountLabel
+
+    for _, val in ipairs(presets) do
+        local btn = CreateFrame("Button", nil, bottomBar, "BackdropTemplate")
+        btn:SetSize(42, 24)
+        btn:SetPoint("LEFT", prevAnchor, "RIGHT", 4, 0)
+        btn:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 6,
+            insets   = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+
+        local isNeg = val < 0
+        btn:SetBackdropColor(isNeg and 0.4 or 0.1, isNeg and 0.1 or 0.35, 0.1, 0.9)
+        btn:SetBackdropBorderColor(isNeg and 0.7 or 0.3, isNeg and 0.2 or 0.6, isNeg and 0.2 or 0.3, 0.6)
+
+        local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        btnText:SetPoint("CENTER")
+        local prefix = val > 0 and "+" or ""
+        local color = isNeg and "|cFFFF6666" or "|cFF66FF66"
+        btnText:SetText(color .. prefix .. tostring(val) .. "|r")
+
+        btn:SetScript("OnClick", function()
+            customBox:SetText(tostring(val))
+        end)
+        btn:SetScript("OnEnter", function(self)
+            self:SetBackdropColor(isNeg and 0.55 or 0.15, isNeg and 0.15 or 0.45, 0.15, 1)
+        end)
+        btn:SetScript("OnLeave", function(self)
+            self:SetBackdropColor(isNeg and 0.4 or 0.1, isNeg and 0.1 or 0.35, 0.1, 0.9)
+        end)
+
+        table.insert(presetBtns, btn)
+        prevAnchor = btn
+    end
+
+    -- Position customBox after preset buttons
+    customBox:SetPoint("LEFT", prevAnchor, "RIGHT", 8, 0)
 
     -- Apply custom button
     local applyBtn = CreateFrame("Button", nil, bottomBar, "BackdropTemplate")

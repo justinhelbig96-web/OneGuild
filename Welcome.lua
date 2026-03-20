@@ -152,7 +152,7 @@ function OneGuild:ShowWelcomeScreen()
 
     -- Main content container
     local container = CreateFrame("Frame", nil, overlay, "BackdropTemplate")
-    container:SetSize(640, 540)
+    container:SetSize(640, 680)
     container:SetPoint("CENTER", overlay, "CENTER", 0, 10)
     container:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8x8",
@@ -255,6 +255,36 @@ function OneGuild:ShowWelcomeScreen()
         "Guild-Lock: Nur fuer Mitglieder deiner Gilde.",
         390, -125, 1.9)
 
+    -- ===== CHANGELOG =====
+    local changelogSep = container:CreateTexture(nil, "ARTWORK")
+    changelogSep:SetHeight(1)
+    changelogSep:SetPoint("TOPLEFT", container, "TOPLEFT", 30, -500)
+    changelogSep:SetPoint("TOPRIGHT", container, "TOPRIGHT", -30, -500)
+    changelogSep:SetColorTexture(0.5, 0.35, 0.1, 0.3)
+
+    local changelogTitle = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    changelogTitle:SetPoint("TOP", changelogSep, "BOTTOM", 0, -8)
+    changelogTitle:SetText("|cFFFFD700Changelog v" .. OneGuild.VERSION .. "|r")
+    FadeIn(changelogTitle, 2.0, 0.5)
+
+    local changelogBody = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    changelogBody:SetPoint("TOP", changelogTitle, "BOTTOM", 0, -6)
+    changelogBody:SetPoint("LEFT", container, "LEFT", 40, 0)
+    changelogBody:SetPoint("RIGHT", container, "RIGHT", -40, 0)
+    changelogBody:SetJustifyH("LEFT")
+    changelogBody:SetWordWrap(true)
+    changelogBody:SetSpacing(2)
+    changelogBody:SetText(
+        "|cFF66FF66+|r DKP Bestaetigungsdialog vor jeder Aenderung\n" ..
+        "|cFF66FF66+|r Preset-Buttons fuellen nur das Textfeld (Anwenden bestaetigt)\n" ..
+        "|cFF66FF66+|r Dual-Channel DKP Sync (GUILD + RAID/PARTY)\n" ..
+        "|cFF66FF66+|r Post-Distribution Verifikation (+15s / +30s)\n" ..
+        "|cFF66FF66+|r Farb-codiertes DKP Log im Chat (gruen/rot)\n" ..
+        "|cFF66FF66+|r Triple-Send & Batch-Nachrichten fuer zuverlaessigen Sync\n" ..
+        "|cFF66FF66+|r 30s Auto-Sync fuer DKP Daten"
+    )
+    FadeIn(changelogBody, 2.1, 0.5)
+
     -- Bottom area
     local bottomBar = CreateFrame("Frame", nil, container)
     bottomBar:SetHeight(70)
@@ -264,7 +294,7 @@ function OneGuild:ShowWelcomeScreen()
     -- "Los geht's" button (gold)
     local startBtn = CreateFrame("Button", nil, bottomBar, "BackdropTemplate")
     startBtn:SetSize(180, 36)
-    startBtn:SetPoint("CENTER", bottomBar, "CENTER", 0, 18)
+    startBtn:SetPoint("TOP", bottomBar, "TOP", 0, -4)
     startBtn:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -282,12 +312,10 @@ function OneGuild:ShowWelcomeScreen()
     startBtn:SetScript("OnEnter", function(self)
         self:SetBackdropColor(0.65, 0.45, 0.08, 1)
         self:SetBackdropBorderColor(1, 0.8, 0.2, 1)
-        btnText:SetText("|cFFFFFFFFLos geht's!  \226\150\184|r")
     end)
     startBtn:SetScript("OnLeave", function(self)
         self:SetBackdropColor(0.5, 0.35, 0.05, 0.95)
         self:SetBackdropBorderColor(0.8, 0.6, 0.1, 0.8)
-        btnText:SetText("|cFFFFFFFFLos geht's!|r")
     end)
     startBtn:SetScript("OnClick", function()
         OneGuild:DismissWelcome()
