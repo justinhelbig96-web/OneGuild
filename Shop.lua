@@ -302,9 +302,12 @@ function OneGuild:RefreshShop()
                 end
             else
                 local parts = {}
-                if g > 0 then table.insert(parts, "|cFFFFD700" .. g .. "g|r") end
-                if s > 0 then table.insert(parts, "|cFFC0C0C0" .. s .. "s|r") end
-                if c > 0 then table.insert(parts, "|cFFB87333" .. c .. "c|r") end
+                local gIcon = "|TInterface\\MoneyFrame\\UI-GoldIcon:12:12|t"
+                local sIcon = "|TInterface\\MoneyFrame\\UI-SilverIcon:12:12|t"
+                local cIcon = "|TInterface\\MoneyFrame\\UI-CopperIcon:12:12|t"
+                if g > 0 then table.insert(parts, "|cFFFFD700" .. g .. "|r" .. gIcon) end
+                if s > 0 then table.insert(parts, "|cFFC0C0C0" .. s .. "|r" .. sIcon) end
+                if c > 0 then table.insert(parts, "|cFFB87333" .. c .. "|r" .. cIcon) end
                 row.priceText:SetText(table.concat(parts, " "))
             end
 
@@ -515,21 +518,21 @@ function OneGuild:ShowAddListingDialog()
         f.goldBox = goldBox
         local goldLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         goldLabel:SetPoint("LEFT", goldBox, "RIGHT", 4, 0)
-        goldLabel:SetText("|cFFFFD700g|r")
+        goldLabel:SetText("|TInterface\\MoneyFrame\\UI-GoldIcon:14:14|t")
 
         local silverBox = MakePriceBox(f, 60)
         silverBox:SetPoint("LEFT", goldLabel, "RIGHT", 8, 0)
         f.silverBox = silverBox
         local silverLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         silverLabel:SetPoint("LEFT", silverBox, "RIGHT", 4, 0)
-        silverLabel:SetText("|cFFC0C0C0s|r")
+        silverLabel:SetText("|TInterface\\MoneyFrame\\UI-SilverIcon:14:14|t")
 
         local copperBox = MakePriceBox(f, 60)
         copperBox:SetPoint("LEFT", silverLabel, "RIGHT", 8, 0)
         f.copperBox = copperBox
         local copperLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         copperLabel:SetPoint("LEFT", copperBox, "RIGHT", 4, 0)
-        copperLabel:SetText("|cFFB87333c|r")
+        copperLabel:SetText("|TInterface\\MoneyFrame\\UI-CopperIcon:14:14|t")
 
         -- Duration field
         local durLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")

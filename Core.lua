@@ -18,7 +18,7 @@ OneGuild.REQUIRED_GUILD = "One"
 ------------------------------------------------------------------------
 -- Version & Constants
 ------------------------------------------------------------------------
-OneGuild.VERSION = "1.4.1"
+OneGuild.VERSION = "1.4.2"
 
 ------------------------------------------------------------------------
 -- Admin Whitelist  –  now loaded from SavedVariables (db.settings.whitelist)
@@ -95,6 +95,12 @@ local DEFAULTS = {
         lootAutoPass   = true,    -- auto-pass in guild raids
         dkpPermission  = "officer",  -- who can edit DKP: "leader", "officer", "raidlead", "all"
         whitelist      = {},    -- dynamic admin whitelist (character names)
+        fxEnabled       = true,
+        fxParticleCount = 35,
+        fxBorderGlow    = true,
+        fxShimmer       = true,
+        fxHeaderShine   = true,
+        fxGlowColor     = { 0.9, 0.65, 0.15 },  -- R, G, B
     },
     dismissed    = false,
     welcomeDismissedVersion = "",

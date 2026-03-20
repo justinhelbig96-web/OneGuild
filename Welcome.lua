@@ -269,6 +269,13 @@ function OneGuild:ShowWelcomeScreen()
 
     -- Changelog data per version
     local changelogData = {
+        { version = "v1.4.2", entries = {
+            "Shop: Gold/Silber/Kupfer Icons statt g/s/c",
+            "NEU: Design-Tab in Einstellungen",
+            "Effekte an/aus schaltbar",
+            "Partikel-Anzahl einstellbar (0-64)",
+            "Glow-Farbe waehlbar (6 Presets)",
+        }},
         { version = "v1.4.1", entries = {
             "FIX: Effekte werden jetzt beim Oeffnen angewendet",
             "NEU: Diagonaler Shine-Sweep ueber das Fenster",

@@ -564,10 +564,123 @@ local function BuildPermissionsTab(content)
 end
 
 ------------------------------------------------------------------------
+--                     TAB: Design (FX-Effekte)
+------------------------------------------------------------------------
+local function BuildDesignTab(content)
+    Label(content, 0, 0, "Design & Effekte", 14, 1, 0.72, 0)
+    HLine(content, -22)
+
+    local function S() return OneGuild.db.settings end
+
+    -- Master toggle
+    MakeCheckbox(content, 0, -34,
+        "Effekte aktiviert",
+        "Schaltet alle visuellen Premium-Effekte ein/aus.\n(/reload noetig)",
+        function() return S().fxEnabled ~= false end,
+        function(val) S().fxEnabled = val end
+    )
+
+    -- Border glow
+    MakeCheckbox(content, 0, -68,
+        "Border-Glow (pulsierender Rand)",
+        "Goldener pulsierender Glow am Fensterrand.",
+        function() return S().fxBorderGlow ~= false end,
+        function(val) S().fxBorderGlow = val end
+    )
+
+    -- Shimmer
+    MakeCheckbox(content, 0, -102,
+        "Border-Shimmer (wandernder Lichtpunkt)",
+        "Lichtpunkt der am Rand entlanggleitet.",
+        function() return S().fxShimmer ~= false end,
+        function(val) S().fxShimmer = val end
+    )
+
+    -- Header Shine
+    MakeCheckbox(content, 0, -136,
+        "Header-Shine (pulsierende Balken)",
+        "Dekorative leuchtende Balken unter dem Titel.",
+        function() return S().fxHeaderShine ~= false end,
+        function(val) S().fxHeaderShine = val end
+    )
+
+    -- Particle count slider
+    MakeSlider(content, 0, -186,
+        "Partikel-Anzahl:", 0, 64, 1,
+        function() return S().fxParticleCount or 35 end,
+        function(val) S().fxParticleCount = val end
+    )
+
+    -- === Glow color picker ===
+    Label(content, 0, -240, "Glow-Farbe:", 12, 0.87, 0.78, 0.55)
+
+    local presets = {
+        { name = "Gold",    c = { 0.9, 0.65, 0.15 } },
+        { name = "Blau",    c = { 0.2, 0.5,  1.0  } },
+        { name = "Gruen",   c = { 0.2, 0.8,  0.3  } },
+        { name = "Rot",     c = { 0.9, 0.2,  0.1  } },
+        { name = "Lila",    c = { 0.6, 0.2,  0.9  } },
+        { name = "Weiss",   c = { 1.0, 1.0,  1.0  } },
+    }
+
+    -- Preview swatch
+    local swatch = content:CreateTexture(nil, "ARTWORK")
+    swatch:SetSize(22, 22)
+    swatch:SetPoint("TOPLEFT", content, "TOPLEFT", 100, -237)
+    swatch:SetTexture("Interface\\Buttons\\WHITE8x8")
+    local gc = S().fxGlowColor or { 0.9, 0.65, 0.15 }
+    swatch:SetVertexColor(gc[1], gc[2], gc[3], 1)
+
+    local btnX = 0
+    for i, preset in ipairs(presets) do
+        local btn = CreateFrame("Button", nil, content, "BackdropTemplate")
+        btn:SetSize(50, 22)
+        btn:SetPoint("TOPLEFT", content, "TOPLEFT", btnX, -264)
+        btn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 8,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+        btn:SetBackdropColor(preset.c[1] * 0.4, preset.c[2] * 0.4, preset.c[3] * 0.4, 0.9)
+        btn:SetBackdropBorderColor(preset.c[1], preset.c[2], preset.c[3], 0.8)
+
+        local txt = btn:CreateFontString(nil, "OVERLAY")
+        txt:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
+        txt:SetPoint("CENTER")
+        txt:SetTextColor(preset.c[1], preset.c[2], preset.c[3])
+        txt:SetText(preset.name)
+
+        btn:SetScript("OnClick", function()
+            S().fxGlowColor = { preset.c[1], preset.c[2], preset.c[3] }
+            swatch:SetVertexColor(preset.c[1], preset.c[2], preset.c[3], 1)
+            OneGuild:Print("|cFFFFD700Glow-Farbe:|r " .. preset.name .. " (nach /reload aktiv)")
+        end)
+
+        btn:SetScript("OnEnter", function(self)
+            self:SetBackdropBorderColor(1, 1, 1, 1)
+        end)
+        btn:SetScript("OnLeave", function(self)
+            self:SetBackdropBorderColor(preset.c[1], preset.c[2], preset.c[3], 0.8)
+        end)
+
+        btnX = btnX + 54
+    end
+
+    -- Info hint
+    local hint = content:CreateFontString(nil, "OVERLAY")
+    hint:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
+    hint:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -300)
+    hint:SetTextColor(0.6, 0.55, 0.45)
+    hint:SetText("Aenderungen werden nach /reload aktiv.")
+end
+
+------------------------------------------------------------------------
 -- TAB DEFINITIONS — add new tabs here
 ------------------------------------------------------------------------
 local TAB_DEFS = {
     { name = "Allgemein",       builder = BuildGeneralTab },
+    { name = "Design",          builder = BuildDesignTab },
     { name = "GuildMap",        builder = BuildGuildMapTab },
     { name = "Loot",            builder = BuildLootTab },
     { name = "Berechtigungen",  builder = BuildPermissionsTab },

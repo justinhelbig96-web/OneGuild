@@ -683,19 +683,37 @@ function FX:ApplyToMainUI()
     if not f or appliedToMain then return end
     appliedToMain = true
 
+    -- Read settings
+    local s = OneGuild.db and OneGuild.db.settings or {}
+    if s.fxEnabled == false then
+        print("|cFFFFB800[OneGuild FX]|r Effekte deaktiviert (Einstellungen).")
+        return
+    end
+
+    local gc = s.fxGlowColor or { 0.9, 0.65, 0.15 }
+    local particleCount = s.fxParticleCount or 35
+
     print("|cFFFFB800[OneGuild FX]|r Effekte werden angewendet...")
 
-    -- 1) Pulsing golden border glow
-    FX:BorderGlowPulse(f, 0.9, 0.65, 0.15, 3.0)
+    -- 1) Pulsing border glow
+    if s.fxBorderGlow ~= false then
+        FX:BorderGlowPulse(f, gc[1], gc[2], gc[3], 3.0)
+    end
 
     -- 2) Traveling border shimmer
-    FX:BorderShimmer(f, 5.0, { 1, 0.75, 0.2, 0.7 })
+    if s.fxShimmer ~= false then
+        FX:BorderShimmer(f, 5.0, { gc[1], gc[2], gc[3], 0.7 })
+    end
 
-    -- 3) Golden floating particles (lots!)
-    FX:GoldParticles(f, 35)
+    -- 3) Golden floating particles
+    if particleCount > 0 then
+        FX:GoldParticles(f, particleCount)
+    end
 
     -- 4) Decorative pulsing header bars
-    FX:HeaderShine(f, -78)
+    if s.fxHeaderShine ~= false then
+        FX:HeaderShine(f, -78)
+    end
 
     -- 7) Title text glow pulse
     if f.titleText then
