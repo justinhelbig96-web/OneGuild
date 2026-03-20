@@ -18,7 +18,7 @@ OneGuild.REQUIRED_GUILD = "One"
 ------------------------------------------------------------------------
 -- Version & Constants
 ------------------------------------------------------------------------
-OneGuild.VERSION = "1.2.2"
+OneGuild.VERSION = "1.2.3"
 
 ------------------------------------------------------------------------
 -- Admin Whitelist  –  now loaded from SavedVariables (db.settings.whitelist)
@@ -333,6 +333,98 @@ end
 function OneGuild:CanEditWhitelist()
     local _, _, rankIndex = GetGuildInfo("player")
     return rankIndex and rankIndex == 0
+end
+
+------------------------------------------------------------------------
+-- DKP Confirmation Dialog
+-- Shows a popup before any DKP change is applied.
+-- title: header text, body: detail text, onConfirm: callback function
+------------------------------------------------------------------------
+function OneGuild:ShowDKPConfirmation(title, body, onConfirm)
+    if not self._dkpConfirmFrame then
+        local f = CreateFrame("Frame", "OneGuildDKPConfirm", UIParent, "BackdropTemplate")
+        f:SetSize(360, 180)
+        f:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
+        f:SetFrameStrata("FULLSCREEN_DIALOG")
+        f:SetFrameLevel(300)
+        f:SetMovable(true)
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", f.StartMoving)
+        f:SetScript("OnDragStop", f.StopMovingOrSizing)
+        f:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 14,
+            insets   = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        f:SetBackdropColor(0.08, 0.04, 0.02, 0.98)
+        f:SetBackdropBorderColor(0.9, 0.5, 0.1, 0.9)
+
+        local titleText = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        titleText:SetPoint("TOP", f, "TOP", 0, -14)
+        f.titleText = titleText
+
+        local bodyText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        bodyText:SetPoint("TOP", titleText, "BOTTOM", 0, -12)
+        bodyText:SetPoint("LEFT", f, "LEFT", 20, 0)
+        bodyText:SetPoint("RIGHT", f, "RIGHT", -20, 0)
+        bodyText:SetJustifyH("CENTER")
+        bodyText:SetWordWrap(true)
+        f.bodyText = bodyText
+
+        -- Confirm button
+        local confirmBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
+        confirmBtn:SetSize(120, 32)
+        confirmBtn:SetPoint("BOTTOMRIGHT", f, "BOTTOM", -8, 16)
+        confirmBtn:RegisterForClicks("AnyUp")
+        confirmBtn:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 10,
+            insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+        })
+        confirmBtn:SetBackdropColor(0.1, 0.5, 0.1, 0.9)
+        confirmBtn:SetBackdropBorderColor(0.2, 0.7, 0.2, 0.7)
+        local confirmText = confirmBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        confirmText:SetPoint("CENTER")
+        confirmText:SetText("|cFF66FF66Bestaetigen|r")
+        confirmBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(0.15, 0.6, 0.15, 1) end)
+        confirmBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(0.1, 0.5, 0.1, 0.9) end)
+        f.confirmBtn = confirmBtn
+
+        -- Cancel button
+        local cancelBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
+        cancelBtn:SetSize(120, 32)
+        cancelBtn:SetPoint("BOTTOMLEFT", f, "BOTTOM", 8, 16)
+        cancelBtn:RegisterForClicks("AnyUp")
+        cancelBtn:SetBackdrop({
+            bgFile   = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 10,
+            insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+        })
+        cancelBtn:SetBackdropColor(0.5, 0.1, 0.1, 0.9)
+        cancelBtn:SetBackdropBorderColor(0.7, 0.2, 0.2, 0.7)
+        local cancelText = cancelBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        cancelText:SetPoint("CENTER")
+        cancelText:SetText("|cFFFF6666Abbrechen|r")
+        cancelBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(0.6, 0.15, 0.15, 1) end)
+        cancelBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(0.5, 0.1, 0.1, 0.9) end)
+        cancelBtn:SetScript("OnClick", function() f:Hide() end)
+        f.cancelBtn = cancelBtn
+
+        self._dkpConfirmFrame = f
+    end
+
+    local f = self._dkpConfirmFrame
+    f.titleText:SetText(title or "|cFFFFAA33DKP Bestaetigung|r")
+    f.bodyText:SetText(body or "")
+    f.confirmBtn:SetScript("OnClick", function()
+        f:Hide()
+        if onConfirm then onConfirm() end
+    end)
+    f:Show()
 end
 
 ------------------------------------------------------------------------

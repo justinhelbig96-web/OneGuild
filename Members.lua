@@ -907,24 +907,29 @@ local function RenderDKPEditRow(row, member)
         self:SetBackdropColor(0.1, 0.4, 0.1, 0.8)
     end)
 
-    -- Confirm (OK) — ADDS entered amount to current DKP
+    -- Confirm (OK) — ADDS entered amount to current DKP (with confirmation dialog)
     row.dkpConfirm:SetScript("OnClick", function()
         local inputVal = tonumber(row.dkpBox:GetText()) or 0
         if inputVal == 0 then return end
         local oldDKP = GetDKP(member)
         local newTotal = oldDKP + inputVal
-        SetDKP(member, newTotal)
-        row.dkpCurrentText:SetText("|cFF8B7355Aktuell: |r|cFF66FF66" .. tostring(newTotal) .. " DKP|r")
-        row.dkpBox:SetText("0")
         local prefix = inputVal >= 0 and "+" or ""
-        OneGuild:Print(OneGuild.COLORS.SUCCESS .. prefix .. tostring(inputVal) .. " DKP fuer " .. memberDisplayName .. " (Neu: " .. newTotal .. ")|r")
-        -- Record history
-        if OneGuild.AddDKPHistory then
-            OneGuild:AddDKPHistory(member.sender, inputVal, newTotal, "manual", UnitName("player") or "?")
-        end
-        -- Refresh to update DKP in the member row too
-        C_Timer.After(0.1, function()
-            OneGuild:UpdateMemberRows()
+        local color = inputVal >= 0 and "|cFF66FF66" or "|cFFFF6666"
+        local bodyText = "|cFFFFD700Spieler:|r " .. memberDisplayName .. "\n"
+            .. "|cFFFFD700Aktuell:|r " .. tostring(oldDKP) .. " DKP\n"
+            .. "|cFFFFD700Aenderung:|r " .. color .. prefix .. tostring(inputVal) .. " DKP|r\n"
+            .. "|cFFFFD700Neuer Stand:|r " .. color .. tostring(newTotal) .. " DKP|r"
+        OneGuild:ShowDKPConfirmation("|cFFFFAA33DKP Anpassung|r", bodyText, function()
+            SetDKP(member, newTotal)
+            row.dkpCurrentText:SetText("|cFF8B7355Aktuell: |r|cFF66FF66" .. tostring(newTotal) .. " DKP|r")
+            row.dkpBox:SetText("0")
+            OneGuild:Print(OneGuild.COLORS.SUCCESS .. prefix .. tostring(inputVal) .. " DKP fuer " .. memberDisplayName .. " (Neu: " .. newTotal .. ")|r")
+            if OneGuild.AddDKPHistory then
+                OneGuild:AddDKPHistory(member.sender, inputVal, newTotal, "manual", UnitName("player") or "?")
+            end
+            C_Timer.After(0.1, function()
+                OneGuild:UpdateMemberRows()
+            end)
         end)
     end)
     row.dkpConfirm:SetScript("OnEnter", function(self)

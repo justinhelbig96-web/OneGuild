@@ -2075,7 +2075,7 @@ end
 ------------------------------------------------------------------------
 -- Apply DKP to all selected players
 ------------------------------------------------------------------------
-function OneGuild:ApplyDKPToSelected(amount)
+function OneGuild:ApplyDKPToSelected(amount, confirmed)
     if not dkpDistFrame or not dkpDistFrame.playerRows then return end
     if not self.db then return end
     if not self:CanEditDKP() then
@@ -2086,6 +2086,42 @@ function OneGuild:ApplyDKPToSelected(amount)
 
     local f = dkpDistFrame
     local bonusType = f.selectedBonus or "manual"
+
+    -- Count selected players for confirmation dialog
+    if not confirmed then
+        local count = 0
+        local nameList = {}
+        for _, row in ipairs(f.playerRows) do
+            if row:IsShown() and row.cb and row.cb:GetChecked() and row.fullName then
+                count = count + 1
+                local short = strsplit("-", row.fullName)
+                if count <= 5 then
+                    table.insert(nameList, short)
+                end
+            end
+        end
+        if count == 0 then return end
+
+        local bonusLabel = bonusType
+        for _, bt in ipairs(DKP_BONUS_TYPES) do
+            if bt.value == bonusType then bonusLabel = bt.label; break end
+        end
+        local prefix = amount >= 0 and "+" or ""
+        local color = amount >= 0 and "|cFF66FF66" or "|cFFFF6666"
+        local playerStr = table.concat(nameList, ", ")
+        if count > 5 then playerStr = playerStr .. " (+" .. (count - 5) .. " weitere)" end
+
+        local bodyText = "|cFFFFD700Spieler:|r " .. tostring(count) .. " ausgewaehlt\n"
+            .. playerStr .. "\n"
+            .. "|cFFFFD700Aenderung:|r " .. color .. prefix .. tostring(amount) .. " DKP|r\n"
+            .. "|cFFFFD700Bonus-Typ:|r " .. bonusLabel
+
+        self:ShowDKPConfirmation("|cFFFFAA33DKP Verteilung|r", bodyText, function()
+            self:ApplyDKPToSelected(amount, true)
+        end)
+        return
+    end
+
     local applied = 0
 
     -- Collect all players to update first
