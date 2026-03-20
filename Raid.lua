@@ -2140,6 +2140,21 @@ function OneGuild:ApplyDKPToSelected(amount)
             if bt.value == bonusType then bonusLabel = bt.label; break end
         end
         self:PrintSuccess(prefix .. tostring(amount) .. " DKP (" .. bonusLabel .. ") an " .. applied .. " Spieler verteilt!")
+
+        -- POST-DISTRIBUTION VERIFICATION: Send full DKP snapshot after 15s
+        -- This catches any messages that were lost during the initial burst
+        C_Timer.After(15, function()
+            if OneGuild.BroadcastDKPBatch then
+                OneGuild:BroadcastDKPBatch()
+                OneGuild:Debug("DKP Verifikations-Broadcast nach Verteilung gesendet")
+            end
+        end)
+        -- And again after 30s for extra safety
+        C_Timer.After(30, function()
+            if OneGuild.BroadcastDKPBatch then
+                OneGuild:BroadcastDKPBatch()
+            end
+        end)
     end
 
     -- Refresh members tab

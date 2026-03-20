@@ -128,7 +128,29 @@ function OneGuild:SendCommMessage(msgType, data)
 
     C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "GUILD")
     if msgType ~= "POS" then
-        self:Debug("Comm TX: " .. payload)
+        self:Debug("Comm TX: " .. strsub(payload, 1, 80))
+    end
+end
+
+------------------------------------------------------------------------
+-- Send DKP message via ALL available channels for maximum reliability
+-- GUILD (all guild members) + RAID/PARTY (direct to group, more reliable)
+------------------------------------------------------------------------
+function OneGuild:SendCommMessageDKP(msgType, data)
+    if not isCommReady then return end
+    if not IsInGuild() then return end
+
+    local payload = msgType
+    if data then payload = msgType .. ":" .. data end
+
+    -- Always send via GUILD
+    C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "GUILD")
+
+    -- ALSO send via RAID or PARTY if in a group (dual-channel)
+    if IsInRaid() then
+        C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "RAID")
+    elseif IsInGroup() then
+        C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "PARTY")
     end
 end
 
@@ -1258,8 +1280,8 @@ function OneGuild:ProcessWhitelistSync(sender, data)
 end
 
 ------------------------------------------------------------------------
--- SendDKPUpdate  -- send a single DKP update with TRIPLE-SEND for reliability
--- Sends the same message 3 times (0s, 3s, 8s) to ensure delivery
+-- SendDKPUpdate  -- send a single DKP update with TRIPLE-SEND + DUAL-CHANNEL
+-- Sends via GUILD + RAID/PARTY, 3 times each (0s, 3s, 8s)
 ------------------------------------------------------------------------
 function OneGuild:SendDKPUpdate(memberKey, dkpVal)
     local ts = time()
@@ -1268,15 +1290,15 @@ function OneGuild:SendDKPUpdate(memberKey, dkpVal)
 
     local payload = memberKey .. "|" .. tostring(dkpVal) .. "|" .. tostring(ts)
 
-    -- Triple-send: fire the same message 3 times with delays
+    -- Triple-send via dual-channel
     for _, delay in ipairs(DKP_TRIPLE_DELAYS) do
         C_Timer.After(delay, function()
             if not isCommReady or not IsInGuild() then return end
-            OneGuild:SendCommMessage(MSG_DKP, payload)
+            OneGuild:SendCommMessageDKP(MSG_DKP, payload)
         end)
     end
 
-    self:Debug("DKP gesendet (3x): " .. memberKey .. " = " .. tostring(dkpVal) .. " (ts=" .. ts .. ")")
+    self:Debug("DKP gesendet (3x dual): " .. memberKey .. " = " .. tostring(dkpVal) .. " (ts=" .. ts .. ")")
 end
 
 ------------------------------------------------------------------------
@@ -1310,13 +1332,13 @@ function OneGuild:SendDKPUpdateBatch(updates)
         table.insert(batches, table.concat(current, ";"))
     end
 
-    -- Triple-send each batch with proper stagger
+    -- Triple-send each batch with proper stagger (dual-channel)
     for bIdx, batchPayload in ipairs(batches) do
         for _, tripleDelay in ipairs(DKP_TRIPLE_DELAYS) do
             local sendDelay = tripleDelay + (bIdx - 1) * 1.0
             C_Timer.After(sendDelay, function()
                 if not isCommReady or not IsInGuild() then return end
-                OneGuild:SendCommMessage(MSG_DKPBATCH, batchPayload)
+                OneGuild:SendCommMessageDKP(MSG_DKPBATCH, batchPayload)
             end)
         end
     end
@@ -1347,7 +1369,7 @@ function OneGuild:BroadcastDKPBatch()
                 local d = msgNum * 0.8
                 C_Timer.After(d, function()
                     if not isCommReady or not IsInGuild() then return end
-                    OneGuild:SendCommMessage(MSG_DKPBATCH, payload)
+                    OneGuild:SendCommMessageDKP(MSG_DKPBATCH, payload)
                 end)
                 batch = {}
                 count = 0
@@ -1360,7 +1382,7 @@ function OneGuild:BroadcastDKPBatch()
         local d = msgNum * 0.8
         C_Timer.After(d, function()
             if not isCommReady or not IsInGuild() then return end
-            OneGuild:SendCommMessage(MSG_DKPBATCH, payload)
+            OneGuild:SendCommMessageDKP(MSG_DKPBATCH, payload)
         end)
     end
 end
