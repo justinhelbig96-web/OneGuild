@@ -1411,6 +1411,7 @@ function OneGuild:ProcessDKPBatch(sender, data)
 
     -- Parse batch: "Name1=dkp=ts;Name2=dkp=ts;..."
     local updated = 0
+    local senderShortName = strsplit("-", sender)
     for entry in data:gmatch("[^;]+") do
         local memberKey, dkpStr, tsStr = strsplit("=", entry)
         if memberKey then
@@ -1419,8 +1420,19 @@ function OneGuild:ProcessDKPBatch(sender, data)
             local localTs = self:GetDKPTimestamp(memberKey)
             -- Only accept if incoming is newer (or no local data)
             if incomingTs == 0 or localTs == 0 or incomingTs >= localTs then
-                self:SetDKPForPlayer(memberKey, dkpVal, incomingTs > 0 and incomingTs or nil)
-                updated = updated + 1
+                local oldDKP = self:GetDKPForPlayer(memberKey)
+                -- Skip if identical (triple-send / auto-sync duplicate)
+                if not (incomingTs > 0 and localTs > 0 and incomingTs == localTs and oldDKP == dkpVal) then
+                    self:SetDKPForPlayer(memberKey, dkpVal, incomingTs > 0 and incomingTs or nil)
+                    updated = updated + 1
+                    -- Color-coded DKP log
+                    local diff = dkpVal - oldDKP
+                    if diff ~= 0 then
+                        local diffPrefix = diff > 0 and "+" or ""
+                        local diffColor = diff > 0 and "|cFF66FF66" or "|cFFFF4444"
+                        self:Print("|cFFFFB800[DKP]|r " .. "|cFFFFFFFF" .. memberKey .. "|r: " .. diffColor .. diffPrefix .. tostring(diff) .. " DKP|r  |cFF888888(" .. tostring(oldDKP) .. " -> " .. tostring(dkpVal) .. ")  von " .. senderShortName .. "|r")
+                    end
+                end
             end
         end
     end
@@ -1518,13 +1530,24 @@ function OneGuild:ProcessDKP(sender, data)
         return
     end
 
+    -- Duplicate check: skip if value is identical (triple-send protection)
+    local oldDKP = self:GetDKPForPlayer(memberKey)
+    if incomingTs > 0 and localTs > 0 and incomingTs == localTs and oldDKP == dkpVal then
+        return  -- already processed this exact update
+    end
+
     -- Use centralized setter (stores under ALL known keys + timestamp)
     self:SetDKPForPlayer(memberKey, dkpVal, incomingTs > 0 and incomingTs or nil)
 
-    -- Visible confirmation so players know DKP was received
+    -- Color-coded DKP log: green for increase, red for decrease
     local short = strsplit("-", memberKey)
     local senderShortName = strsplit("-", sender)
-    self:Print(OneGuild.COLORS.SUCCESS .. "DKP empfangen: " .. short .. " = " .. tostring(dkpVal) .. " (von " .. senderShortName .. ")|r")
+    local diff = dkpVal - oldDKP
+    if diff ~= 0 then
+        local diffPrefix = diff > 0 and "+" or ""
+        local diffColor = diff > 0 and "|cFF66FF66" or "|cFFFF4444"
+        self:Print("|cFFFFB800[DKP]|r " .. "|cFFFFFFFF" .. short .. "|r: " .. diffColor .. diffPrefix .. tostring(diff) .. " DKP|r  |cFF888888(" .. tostring(oldDKP) .. " -> " .. tostring(dkpVal) .. ")  von " .. senderShortName .. "|r")
+    end
 
     -- Debounced UI refresh: collect all DKP updates and refresh once
     self:ScheduleDKPRefresh()
