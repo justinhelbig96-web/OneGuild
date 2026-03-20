@@ -2207,6 +2207,133 @@ end
 -- DKP HISTORY WINDOW
 ------------------------------------------------------------------------
 local dkpHistFrame = nil
+local dkpExportFrame = nil
+
+------------------------------------------------------------------------
+-- DKP Export Window  (Ctrl+A, Ctrl+C to copy)
+------------------------------------------------------------------------
+function OneGuild:ShowDKPExportWindow()
+    if dkpExportFrame then
+        dkpExportFrame:Hide()
+        dkpExportFrame = nil
+    end
+
+    local history = (self.db and self.db.dkpHistory) or {}
+    if #history == 0 then
+        print("|cFFFFB800[OneGuild]|r Keine DKP Historie zum Exportieren vorhanden.")
+        return
+    end
+
+    -- Build export text
+    local lines = {}
+    table.insert(lines, "OneGuild DKP Historie Export")
+    table.insert(lines, "Exportiert am: " .. date("%d.%m.%Y %H:%M:%S"))
+    table.insert(lines, "Eintraege: " .. #history)
+    table.insert(lines, string.rep("=", 80))
+    table.insert(lines, "")
+    table.insert(lines, string.format("%-16s  %-15s  %8s  %8s  %-15s  %-15s",
+        "Datum/Zeit", "Spieler", "Betrag", "Gesamt", "Typ", "Von"))
+    table.insert(lines, string.rep("-", 80))
+
+    for i = #history, 1, -1 do
+        local e = history[i]
+        local ts = date("%d.%m %H:%M:%S", e.timestamp or 0)
+        local player = strsplit("-", e.player or "?")
+        local amt = e.amount or 0
+        local total = e.newTotal or 0
+        local btype = e.bonusType or "?"
+        local source = strsplit("-", e.source or "?")
+        table.insert(lines, string.format("%-16s  %-15s  %+8d  %8d  %-15s  %-15s",
+            ts, player, amt, total, btype, source))
+    end
+
+    local text = table.concat(lines, "\n")
+
+    -- Store in SavedVariables for PowerShell extraction
+    self.db.dkpExport = text
+    self.db.dkpExportTime = time()
+
+    -- Create export frame
+    local f = CreateFrame("Frame", "OneGuildDKPExportFrame", UIParent, "BackdropTemplate")
+    f:SetSize(640, 420)
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:SetClampedToScreen(true)
+    f:SetFrameStrata("FULLSCREEN_DIALOG")
+    f:SetFrameLevel(260)
+    f:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 14,
+        insets   = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    f:SetBackdropColor(0.05, 0.03, 0.06, 0.98)
+    f:SetBackdropBorderColor(0.3, 0.3, 0.7, 0.8)
+
+    -- Title bar
+    local etb = CreateFrame("Frame", nil, f)
+    etb:SetHeight(32)
+    etb:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+    etb:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
+    etb:EnableMouse(true)
+    etb:RegisterForDrag("LeftButton")
+    etb:SetScript("OnDragStart", function() f:StartMoving() end)
+    etb:SetScript("OnDragStop", function() f:StopMovingOrSizing() end)
+
+    local etitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    etitle:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -8)
+    etitle:SetText("|cFF88AAFFDKP Export|r")
+
+    local ehint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ehint:SetPoint("LEFT", etitle, "RIGHT", 12, 0)
+    ehint:SetText("|cFF888888Strg+A dann Strg+C zum Kopieren  |  /reload dann PowerShell Script fuer Datei-Export|r")
+
+    local ecloseBtn = CreateFrame("Button", nil, etb, "UIPanelCloseButton")
+    ecloseBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
+    ecloseBtn:SetScript("OnClick", function() f:Hide(); dkpExportFrame = nil end)
+
+    -- Scroll frame with EditBox
+    local sf = CreateFrame("ScrollFrame", "OneGuildExportScroll", f, "UIPanelScrollFrameTemplate")
+    sf:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -36)
+    sf:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -30, 12)
+
+    local eb = CreateFrame("EditBox", nil, sf)
+    eb:SetMultiLine(true)
+    eb:SetAutoFocus(false)
+    eb:SetFontObject(GameFontHighlightSmall)
+    eb:SetWidth(sf:GetWidth() > 10 and sf:GetWidth() or 580)
+    eb:SetText(text)
+    eb:SetCursorPosition(0)
+    sf:SetScrollChild(eb)
+
+    -- Auto-select all text when focused
+    eb:SetScript("OnEditFocusGained", function(self)
+        self:HighlightText()
+    end)
+
+    -- Prevent editing (read-only)
+    eb:SetScript("OnChar", function() end)
+    eb:SetScript("OnTextChanged", function(self, userInput)
+        if userInput then
+            self:SetText(text)
+            self:SetCursorPosition(0)
+        end
+    end)
+
+    -- Fix width after layout
+    C_Timer.After(0.05, function()
+        if sf:GetWidth() > 10 then
+            eb:SetWidth(sf:GetWidth())
+        end
+    end)
+
+    dkpExportFrame = f
+    f:Show()
+
+    print("|cFFFFB800[OneGuild]|r DKP Export erstellt (" .. #history .. " Eintraege). Strg+A und Strg+C zum Kopieren.")
+    print("|cFFFFB800[OneGuild]|r Fuer Datei-Export: /reload, dann OneGuild_DKP_Export.ps1 ausfuehren.")
+end
 
 function OneGuild:ShowDKPHistory()
     if dkpHistFrame then
@@ -2253,6 +2380,59 @@ function OneGuild:ShowDKPHistory()
     local closeBtn = CreateFrame("Button", nil, tb, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
     closeBtn:SetScript("OnClick", function() f:Hide() end)
+
+    -- Export button (child of tb so clicks work!)
+    local exportBtn = CreateFrame("Button", nil, tb, "BackdropTemplate")
+    exportBtn:SetSize(82, 22)
+    exportBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -34, -5)
+    exportBtn:RegisterForClicks("AnyUp")
+    exportBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    exportBtn:SetBackdropColor(0.1, 0.1, 0.3, 0.9)
+    exportBtn:SetBackdropBorderColor(0.3, 0.3, 0.7, 0.7)
+    local expBtnText = exportBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    expBtnText:SetPoint("CENTER")
+    expBtnText:SetText("|cFF88AAFFExportieren|r")
+    exportBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(0.15, 0.15, 0.4, 1) end)
+    exportBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(0.1, 0.1, 0.3, 0.9) end)
+    exportBtn:SetScript("OnClick", function()
+        OneGuild:ShowDKPExportWindow()
+    end)
+
+    -- Delete button (child of tb so clicks work!)
+    local deleteBtn = CreateFrame("Button", nil, tb, "BackdropTemplate")
+    deleteBtn:SetSize(70, 22)
+    deleteBtn:SetPoint("RIGHT", exportBtn, "LEFT", -4, 0)
+    deleteBtn:RegisterForClicks("AnyUp")
+    deleteBtn:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    deleteBtn:SetBackdropColor(0.3, 0.08, 0.08, 0.9)
+    deleteBtn:SetBackdropBorderColor(0.7, 0.2, 0.2, 0.7)
+    local delBtnText = deleteBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    delBtnText:SetPoint("CENTER")
+    delBtnText:SetText("|cFFFF6666Loeschen|r")
+    deleteBtn:SetScript("OnEnter", function(self) self:SetBackdropColor(0.4, 0.1, 0.1, 1) end)
+    deleteBtn:SetScript("OnLeave", function(self) self:SetBackdropColor(0.3, 0.08, 0.08, 0.9) end)
+    deleteBtn:SetScript("OnClick", function()
+        OneGuild:ShowDKPConfirmation(
+            "|cFFFF4444DKP Historie Loeschen|r",
+            "Moechtest du wirklich die gesamte\nDKP Historie loeschen?\n\n|cFFFF6666Dies kann nicht rueckgaengig gemacht werden!|r",
+            function()
+                OneGuild.db.dkpHistory = {}
+                f.scrollOffset = 0
+                OneGuild:RefreshDKPHistory()
+                print("|cFFFFB800[OneGuild]|r DKP Historie geloescht.")
+            end
+        )
+    end)
 
     -- Column headers
     local headerBar = CreateFrame("Frame", nil, f)
