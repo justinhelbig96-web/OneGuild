@@ -117,15 +117,39 @@ function FX:BorderShimmer(frame, speed, color)
     local shimmer = frame:CreateTexture(nil, "OVERLAY", nil, 7)
     shimmer:SetTexture("Interface\\Buttons\\WHITE8x8")
     shimmer:SetBlendMode("ADD")
+    shimmer:SetSize(10, 10)
     shimmer:SetVertexColor(color[1], color[2], color[3], 0)
 
+    -- Trailing glow (larger, softer) for a comet-tail look
+    local trail = frame:CreateTexture(nil, "OVERLAY", nil, 6)
+    trail:SetTexture("Interface\\Buttons\\WHITE8x8")
+    trail:SetBlendMode("ADD")
+    trail:SetSize(6, 6)
+    trail:SetVertexColor(color[1], color[2], color[3], 0)
+
     local elapsed = 0
+    local prevX, prevY = 0, 0
+
+    -- Convert perimeter position to x,y offset from TOPLEFT
+    local function PosToXY(pos, w, h)
+        local perim = 2 * (w + h)
+        pos = pos % perim
+        if pos < w then
+            return pos, 0                      -- top edge
+        elseif pos < w + h then
+            return w, -(pos - w)               -- right edge
+        elseif pos < 2 * w + h then
+            return w - (pos - w - h), -h       -- bottom edge
+        else
+            return 0, -(h - (pos - 2 * w - h)) -- left edge
+        end
+    end
+
     local ticker = C_Timer.NewTicker(0.016, function()
         if not frame or not frame:IsVisible() then return end
         elapsed = elapsed + 0.016
         local phase = (elapsed / speed) % 1.0
 
-        -- Read dimensions every tick (safe even if frame resized)
         local w = frame:GetWidth() or 0
         local h = frame:GetHeight() or 0
         if w < 10 or h < 10 then return end
@@ -134,24 +158,19 @@ function FX:BorderShimmer(frame, speed, color)
         local pos = phase * totalPerimeter
         local alpha = 0.5 + 0.4 * math.sin(elapsed * 5)
 
+        local x, y = PosToXY(pos, w, h)
+
+        -- Main shimmer dot (always square, no flip)
         shimmer:ClearAllPoints()
-        if pos < w then
-            shimmer:SetSize(60, 3)
-            shimmer:SetPoint("TOPLEFT", frame, "TOPLEFT", pos - 30, 0)
-        elseif pos < w + h then
-            local p = pos - w
-            shimmer:SetSize(3, 60)
-            shimmer:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -p + 30)
-        elseif pos < 2 * w + h then
-            local p = pos - w - h
-            shimmer:SetSize(60, 3)
-            shimmer:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -p + 30, 0)
-        else
-            local p = pos - 2 * w - h
-            shimmer:SetSize(3, 60)
-            shimmer:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, p - 30)
-        end
+        shimmer:SetPoint("CENTER", frame, "TOPLEFT", x, y)
         shimmer:SetVertexColor(color[1], color[2], color[3], alpha)
+
+        -- Trailing dot follows slightly behind
+        local trailPos = pos - 18
+        local tx, ty = PosToXY(trailPos, w, h)
+        trail:ClearAllPoints()
+        trail:SetPoint("CENTER", frame, "TOPLEFT", tx, ty)
+        trail:SetVertexColor(color[1], color[2], color[3], alpha * 0.5)
     end)
 
     frame._shimmerTicker = ticker
