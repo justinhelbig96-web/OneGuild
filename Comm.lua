@@ -43,6 +43,9 @@ local MSG_DKPREQ   = "DKR"          -- request DKP snapshot from admins
 local MSG_NOTE     = "NT"           -- guild note (create/sync)
 local MSG_NOTEDEL  = "NTD"          -- guild note deleted
 local MSG_NOTEREQ  = "NTR"          -- request all notes from online members
+local MSG_SHOP     = "SH"           -- shop listing (create/sync)
+local MSG_SHOPDEL  = "SHD"          -- shop listing deleted
+local MSG_SHOPREQ  = "SHR"          -- request all shop listings
 
 local DKP_SYNC_INTERVAL = 30         -- DKP-only auto-sync every 30 seconds
 local DKP_TRIPLE_DELAYS = { 0, 3, 8 } -- triple-send delays for reliability
@@ -107,6 +110,13 @@ function OneGuild:InitComm()
     C_Timer.After(7, function()
         if OneGuild:IsAuthorized() then
             OneGuild:SendCommMessage(MSG_NOTEREQ)
+        end
+    end)
+
+    -- Request shop listings from online members on login
+    C_Timer.After(8, function()
+        if OneGuild:IsAuthorized() then
+            OneGuild:SendCommMessage(MSG_SHOPREQ)
         end
     end)
 
@@ -215,6 +225,8 @@ function OneGuild:FullSync()
     delay = self:BroadcastTombstones(delay)
     -- guild notes
     delay = self:BroadcastAllNotes(delay)
+    -- shop listings
+    delay = self:BroadcastAllShopListings(delay)
 
     self:Debug("Comm: FullSync gestartet (broadcasts bis +" .. delay .. "s)")
 end
@@ -524,6 +536,17 @@ function OneGuild:HandleAddonMessage(prefix, message, channel, sender)
         C_Timer.After(math.random() * 3 + 1, function()
             if OneGuild:IsAuthorized() then
                 OneGuild:BroadcastAllNotes()
+            end
+        end)
+    elseif msgType == MSG_SHOP     then
+        self:ProcessShopListing(sender, data)
+    elseif msgType == MSG_SHOPDEL  then
+        self:ProcessShopDel(sender, data)
+    elseif msgType == MSG_SHOPREQ  then
+        -- Someone requests shop listings
+        C_Timer.After(math.random() * 3 + 1, function()
+            if OneGuild:IsAuthorized() then
+                OneGuild:BroadcastAllShopListings()
             end
         end)
     elseif msgType == MSG_BYE      then
@@ -1755,7 +1778,104 @@ function OneGuild:ProcessNote(sender, data)
     if self.RefreshNotes then self:RefreshNotes() end
 end
 
-function OneGuild:ProcessNoteDel(sender, data)
+------------------------------------------------------------------------
+-- Shop Listings Sync
+-- Format: id|seller|itemName|price|currency|note|timestamp|expires
+------------------------------------------------------------------------
+
+function OneGuild:BroadcastShopListing(listing)
+    if not listing or not listing.id then return end
+    local safeName = (listing.itemName or ""):gsub("|", "%%PIPE%%")
+    local safeNote = (listing.note or ""):gsub("|", "%%PIPE%%")
+    local payload = table.concat({
+        listing.id,
+        listing.seller or "?",
+        safeName,
+        listing.price or "Verhandelbar",
+        listing.currency or "Gold",
+        safeNote,
+        tostring(listing.timestamp or 0),
+        tostring(listing.expires or 0),
+    }, "|")
+    self:SendCommMessage(MSG_SHOP, payload)
+end
+
+function OneGuild:BroadcastShopDel(listingId)
+    if not listingId then return end
+    self:SendCommMessage(MSG_SHOPDEL, listingId)
+end
+
+function OneGuild:BroadcastAllShopListings(delay)
+    delay = delay or 0.5
+    if not self.db or not self.db.shopListings then return delay end
+    for _, listing in ipairs(self.db.shopListings) do
+        if listing.id then
+            local l = listing
+            C_Timer.After(delay, function()
+                if OneGuild.BroadcastShopListing then OneGuild:BroadcastShopListing(l) end
+            end)
+            delay = delay + 0.3
+        end
+    end
+    return delay
+end
+
+function OneGuild:ProcessShopListing(sender, data)
+    if not data or not self.db then return end
+    if not self.db.shopListings then self.db.shopListings = {} end
+
+    local id, seller, safeName, price, currency, safeNote, tsStr, expStr = strsplit("|", data, 8)
+    if not id or not safeName then return end
+
+    local itemName = safeName:gsub("%%PIPE%%", "|")
+    local note = (safeNote or ""):gsub("%%PIPE%%", "|")
+    local ts = tonumber(tsStr) or 0
+    local expires = tonumber(expStr) or 0
+
+    -- Skip expired
+    if expires > 0 and expires < time() then return end
+
+    -- Check if listing already exists
+    for _, existing in ipairs(self.db.shopListings) do
+        if existing.id == id then
+            return -- already have it
+        end
+    end
+
+    table.insert(self.db.shopListings, {
+        id        = id,
+        seller    = seller or "?",
+        itemName  = itemName,
+        itemLink  = nil,
+        itemIcon  = nil,
+        price     = price or "Verhandelbar",
+        currency  = currency or "Gold",
+        note      = note,
+        timestamp = ts,
+        expires   = expires,
+    })
+
+    self:Debug("Shop-Listing empfangen von " .. sender .. ": " .. strsub(itemName, 1, 40))
+
+    -- Refresh shop UI + badge
+    if self.RefreshShop then self:RefreshShop() end
+    if self.UpdateShopBadge then self:UpdateShopBadge() end
+end
+
+function OneGuild:ProcessShopDel(sender, data)
+    if not data or not self.db or not self.db.shopListings then return end
+
+    for i = #self.db.shopListings, 1, -1 do
+        if self.db.shopListings[i].id == data then
+            table.remove(self.db.shopListings, i)
+            self:Debug("Shop-Listing geloescht via Sync: " .. data)
+            break
+        end
+    end
+
+    if self.RefreshShop then self:RefreshShop() end
+    if self.UpdateShopBadge then self:UpdateShopBadge() end
+endfunction OneGuild:ProcessNoteDel(sender, data)
     if not data or not self.db or not self.db.notes then return end
 
     for i = #self.db.notes, 1, -1 do

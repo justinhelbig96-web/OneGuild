@@ -18,7 +18,7 @@ OneGuild.REQUIRED_GUILD = "One"
 ------------------------------------------------------------------------
 -- Version & Constants
 ------------------------------------------------------------------------
-OneGuild.VERSION = "1.2.9"
+OneGuild.VERSION = "1.3.0"
 
 ------------------------------------------------------------------------
 -- Admin Whitelist  –  now loaded from SavedVariables (db.settings.whitelist)
@@ -77,6 +77,8 @@ local DEFAULTS = {
     dkp          = {},        -- { ["Name-Realm"] = number }  DKP per member
     dkpHistory   = {},        -- { { player, amount, newTotal, bonusType, source, timestamp } }
     auctionHistory = {},      -- { { itemLink, itemName, auctioneer, winner, winAmount, timestamp } }
+    shopListings   = {},       -- { { id, seller, itemName, itemLink, price, currency, note, timestamp, expires } }
+    shopLastSeen   = 0,        -- timestamp of last time shop tab was viewed
     deletedRaids  = {},       -- { ["created:author"] = true }  tombstones for deleted raids
     deletedEvents = {},       -- { ["created:author"] = true }  tombstones for deleted events
     raidGroups   = {},        -- global raid groups { [1..8] = { "Name", ... } }

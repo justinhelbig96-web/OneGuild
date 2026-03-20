@@ -321,29 +321,53 @@ function OneGuild:RefreshDKPLoot()
             panel.timerText:SetText("|cFFFF4444Beendet|r")
         end
 
-        -- High bid
-        if auction.highBid and auction.highBid.player then
-            panel.highBidText:SetText("|cFF66FF66Hoechstgebot: " .. auction.highBid.amount .. " DKP|r\n|cFFAAAAAA" .. ShortName(auction.highBid.player) .. "|r")
-        else
-            panel.highBidText:SetText("|cFF888888Noch kein Gebot|r")
-        end
+        -- High bid (only auctioneer/admins see details)
+        local myName = ShortName(UnitName("player"))
+        local auctioneerShort = ShortName(auction.auctioneer or "")
+        local isAuctioneer = (myName == auctioneerShort) or OneGuild:IsOnWhitelist(myName)
 
-        -- Bid list
-        local bidLines = {}
-        if auction.bids then
-            -- Sort bids by amount descending
-            local sorted = {}
-            for player, amount in pairs(auction.bids) do
-                table.insert(sorted, { player = player, amount = amount })
+        if isAuctioneer then
+            if auction.highBid and auction.highBid.player then
+                panel.highBidText:SetText("|cFF66FF66Hoechstgebot: " .. auction.highBid.amount .. " DKP|r\n|cFFAAAAAA" .. ShortName(auction.highBid.player) .. "|r")
+            else
+                panel.highBidText:SetText("|cFF888888Noch kein Gebot|r")
             end
-            table.sort(sorted, function(a, b) return a.amount > b.amount end)
-            for i, entry in ipairs(sorted) do
-                if i <= 8 then
-                    table.insert(bidLines, "|cFFDDB866" .. ShortName(entry.player) .. "|r: |cFFFFFFFF" .. entry.amount .. " DKP|r")
+        else
+            -- Non-auctioneer: show own bid or generic status
+            local myFullName = UnitName("player")
+            local myBid = auction.bids and (auction.bids[myFullName] or auction.bids[myName])
+            if myBid then
+                panel.highBidText:SetText("|cFF66FF66Dein Gebot: " .. myBid .. " DKP|r")
+            else
+                local bidCount = 0
+                if auction.bids then for _ in pairs(auction.bids) do bidCount = bidCount + 1 end end
+                if bidCount > 0 then
+                    panel.highBidText:SetText("|cFFFFCC00" .. bidCount .. " Gebot(e) abgegeben|r")
+                else
+                    panel.highBidText:SetText("|cFF888888Noch kein Gebot|r")
                 end
             end
         end
-        panel.bidListText:SetText(table.concat(bidLines, "   "))
+
+        -- Bid list (only visible to auctioneer/admins)
+        if isAuctioneer then
+            local bidLines = {}
+            if auction.bids then
+                local sorted = {}
+                for player, amount in pairs(auction.bids) do
+                    table.insert(sorted, { player = player, amount = amount })
+                end
+                table.sort(sorted, function(a, b) return a.amount > b.amount end)
+                for i, entry in ipairs(sorted) do
+                    if i <= 8 then
+                        table.insert(bidLines, "|cFFDDB866" .. ShortName(entry.player) .. "|r: |cFFFFFFFF" .. entry.amount .. " DKP|r")
+                    end
+                end
+            end
+            panel.bidListText:SetText(table.concat(bidLines, "   "))
+        else
+            panel.bidListText:SetText("")
+        end
 
         -- Show end/cancel buttons only for auctioneer
         local myName = ShortName(UnitName("player"))
@@ -1196,11 +1220,30 @@ function OneGuild:UpdateBidWindow()
     end
 
     local auction = self.activeAuction
+    local myName = ShortName(UnitName("player"))
+    local auctioneerShort = ShortName(auction.auctioneer or "")
+    local isAuctioneer = (myName == auctioneerShort) or self:IsOnWhitelist(myName)
 
-    if auction.highBid and auction.highBid.player then
-        f.highBidText:SetText("|cFF66FF66Hoechstgebot: " .. auction.highBid.amount .. " DKP\n|cFFAAAAAA" .. ShortName(auction.highBid.player) .. "|r")
+    if isAuctioneer then
+        if auction.highBid and auction.highBid.player then
+            f.highBidText:SetText("|cFF66FF66Hoechstgebot: " .. auction.highBid.amount .. " DKP\n|cFFAAAAAA" .. ShortName(auction.highBid.player) .. "|r")
+        else
+            f.highBidText:SetText("|cFF888888Noch kein Gebot|r")
+        end
     else
-        f.highBidText:SetText("|cFF888888Noch kein Gebot|r")
+        local myFullName = UnitName("player")
+        local myBid = auction.bids and (auction.bids[myFullName] or auction.bids[myName])
+        if myBid then
+            f.highBidText:SetText("|cFF66FF66Dein Gebot: " .. myBid .. " DKP|r")
+        else
+            local bidCount = 0
+            if auction.bids then for _ in pairs(auction.bids) do bidCount = bidCount + 1 end end
+            if bidCount > 0 then
+                f.highBidText:SetText("|cFFFFCC00" .. bidCount .. " Gebot(e) abgegeben|r")
+            else
+                f.highBidText:SetText("|cFF888888Noch kein Gebot|r")
+            end
+        end
     end
 
     -- Timer update is handled by the ticker
@@ -1264,8 +1307,20 @@ function OneGuild:ProcessAuctionBid(sender, data)
 
     self:RecordBid(sender, amount)
 
-    if ShortName(sender) ~= ShortName(UnitName("player")) then
-        self:Print(self.COLORS.INFO .. ShortName(sender) .. " bietet " .. amount .. " DKP|r")
+    -- Only auctioneer/admins see bid details in chat
+    local myName = ShortName(UnitName("player"))
+    local isAuctioneer = false
+    if self.activeAuction then
+        local auctioneerShort = ShortName(self.activeAuction.auctioneer or "")
+        isAuctioneer = (myName == auctioneerShort) or self:IsOnWhitelist(myName)
+    end
+
+    if ShortName(sender) ~= myName then
+        if isAuctioneer then
+            self:Print(self.COLORS.INFO .. ShortName(sender) .. " bietet " .. amount .. " DKP|r")
+        else
+            self:Print(self.COLORS.INFO .. "Ein neues Gebot wurde abgegeben.|r")
+        end
     end
 end
 

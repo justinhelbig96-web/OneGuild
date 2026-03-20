@@ -14,7 +14,7 @@ local FRAME_HEIGHT = 580
 local TAB_HEIGHT   = 32
 local HEADER_H     = 80
 
-local TAB_NAMES = { "Mitglieder", "Events", "Raid", "DKP Loot", "Notizen", "Charaktere" }
+local TAB_NAMES = { "Mitglieder", "Events", "Raid", "DKP Loot", "Notizen", "Charaktere", "Shop" }
 
 ------------------------------------------------------------------------
 -- State
@@ -507,7 +507,7 @@ function OneGuild:BuildMainFrame()
 
     for i, name in ipairs(TAB_NAMES) do
         local tab = CreateFrame("Button", "OneGuildTab" .. i, tabContainer, "BackdropTemplate")
-        tab:SetSize(90, TAB_HEIGHT - 4)
+        tab:SetSize(82, TAB_HEIGHT - 4)
         tab:SetBackdrop({
             bgFile   = "Interface\\Buttons\\WHITE8x8",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -572,6 +572,7 @@ function OneGuild:BuildMainFrame()
     if self.BuildDKPLootTab then self:BuildDKPLootTab() end
     if self.BuildNotesTab then  self:BuildNotesTab()  end
     if self.BuildCharactersTab then self:BuildCharactersTab() end
+    if self.BuildShopTab then self:BuildShopTab() end
 
     -- Show first tab
     self:ShowTab(1)
@@ -615,6 +616,14 @@ function OneGuild:ShowTab(index)
         self:RefreshNotes()
     elseif index == 6 and self.RefreshCharacters then
         self:RefreshCharacters()
+    elseif index == 7 and self.RefreshShop then
+        self:RefreshShop()
+    end
+
+    -- Update shop badge (hide when viewing shop)
+    if index == 7 and self.db then
+        self.db.shopLastSeen = time()
+        if self.UpdateShopBadge then self:UpdateShopBadge() end
     end
 end
 

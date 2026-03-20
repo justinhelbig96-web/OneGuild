@@ -17,6 +17,7 @@ Characters.lua
 Welcome.lua
 GuildTab.lua
 DKPLoot.lua
+Shop.lua
 UI.lua
 Members.lua
 Events.lua
