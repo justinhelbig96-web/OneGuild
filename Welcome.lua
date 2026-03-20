@@ -269,6 +269,14 @@ function OneGuild:ShowWelcomeScreen()
 
     -- Changelog data per version
     local changelogData = {
+        { version = "v1.4.1", entries = {
+            "FIX: Effekte werden jetzt beim Oeffnen angewendet",
+            "NEU: Diagonaler Shine-Sweep ueber das Fenster",
+            "NEU: Animierte Progress-Bar unter dem Header",
+            "NEU: Pulsierende Header-Shine-Balken",
+            "Border-Shimmer & Partikel deutlich sichtbarer",
+            "Goldene Partikel groesser & heller",
+        }},
         { version = "v1.4.0", entries = {
             "Premium UI Effekte: Animierte Border-Shimmer",
             "Gleitender Tab-Indikator mit Glow",
