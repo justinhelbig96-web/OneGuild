@@ -2249,10 +2249,6 @@ function OneGuild:ShowDKPExportWindow()
 
     local text = table.concat(lines, "\n")
 
-    -- Store in SavedVariables for PowerShell extraction
-    self.db.dkpExport = text
-    self.db.dkpExportTime = time()
-
     -- Create export frame
     local f = CreateFrame("Frame", "OneGuildDKPExportFrame", UIParent, "BackdropTemplate")
     f:SetSize(640, 420)
@@ -2287,7 +2283,7 @@ function OneGuild:ShowDKPExportWindow()
 
     local ehint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ehint:SetPoint("LEFT", etitle, "RIGHT", 12, 0)
-    ehint:SetText("|cFF888888Strg+A dann Strg+C zum Kopieren  |  /reload dann PowerShell Script fuer Datei-Export|r")
+    ehint:SetText("|cFF888888Strg+A dann Strg+C zum Kopieren|r")
 
     local ecloseBtn = CreateFrame("Button", nil, etb, "UIPanelCloseButton")
     ecloseBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
@@ -2332,7 +2328,6 @@ function OneGuild:ShowDKPExportWindow()
     f:Show()
 
     print("|cFFFFB800[OneGuild]|r DKP Export erstellt (" .. #history .. " Eintraege). Strg+A und Strg+C zum Kopieren.")
-    print("|cFFFFB800[OneGuild]|r Fuer Datei-Export: /reload, dann OneGuild_DKP_Export.ps1 ausfuehren.")
 end
 
 function OneGuild:ShowDKPHistory()
