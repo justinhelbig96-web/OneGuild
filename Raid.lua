@@ -2119,14 +2119,18 @@ function OneGuild:ApplyDKPToSelected(amount)
         end
     end
 
-    -- Send DKP updates with minimal stagger to avoid WoW addon message throttle
-    -- (sending too fast can cause silent message drops)
-    for idx, upd in ipairs(updates) do
-        C_Timer.After((idx - 1) * 0.05, function()
-            if OneGuild.SendDKPUpdate then
-                OneGuild:SendDKPUpdate(upd.name, upd.dkp)
-            end
-        end)
+    -- Send DKP updates as a batch (reliable triple-send with proper stagger)
+    if OneGuild.SendDKPUpdateBatch then
+        OneGuild:SendDKPUpdateBatch(updates)
+    else
+        -- Fallback: send individually with safe 0.5s stagger
+        for idx, upd in ipairs(updates) do
+            C_Timer.After((idx - 1) * 0.5, function()
+                if OneGuild.SendDKPUpdate then
+                    OneGuild:SendDKPUpdate(upd.name, upd.dkp)
+                end
+            end)
+        end
     end
 
     if applied > 0 then

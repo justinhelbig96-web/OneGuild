@@ -18,7 +18,7 @@ OneGuild.REQUIRED_GUILD = "One"
 ------------------------------------------------------------------------
 -- Version & Constants
 ------------------------------------------------------------------------
-OneGuild.VERSION = "1.1.2"
+OneGuild.VERSION = "1.2.0"
 
 ------------------------------------------------------------------------
 -- Admin Whitelist  –  now loaded from SavedVariables (db.settings.whitelist)
@@ -548,11 +548,9 @@ SlashCmdList["ONEGUILD"] = function(msg)
             OneGuild:Print(OneGuild.COLORS.MUTED .. "Kein MOTD gesetzt.|r")
         end
     elseif msg == "dkptest" or msg == "dkppush" then
-        -- Legacy: officer note writing no longer works in Midnight.
-        -- DKP is now synced entirely via addon comm messages.
-        OneGuild:Print("|cFFFFD700DKP wird jetzt ueber Addon-Kommunikation synchronisiert.|r")
-        OneGuild:Print("Offiziersnotizen koennen in Midnight nicht mehr geschrieben werden.")
-        OneGuild:Print("Nutze den |cFF66FF66Sync|r Button oder /reload um DKP zu synchronisieren.")
+        -- DKP is synced via addon comm messages with triple-send + batch + 30s auto-sync
+        OneGuild:Print("|cFFFFD700DKP wird automatisch alle 30 Sekunden synchronisiert.|r")
+        OneGuild:Print("Triple-Send + Batch-Modus aktiv fuer zuverlaessige Uebertragung.")
     elseif msg == "help" then
         OneGuild:Print("Befehle:")
         OneGuild:Print("  /og         - Hauptfenster öffnen/schließen")

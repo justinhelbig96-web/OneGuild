@@ -38,12 +38,18 @@ local MSG_AUCBID   = "ACB"          -- DKP auction bid
 local MSG_AUCEND   = "ACE"          -- DKP auction end (winner)
 local MSG_AUCCANCEL= "ACC"          -- DKP auction cancel
 local MSG_WLSYNC   = "WLS"          -- whitelist sync
+local MSG_DKPBATCH = "DKB"          -- batch DKP (multiple players in one msg)
+local MSG_DKPREQ   = "DKR"          -- request DKP snapshot from admins
+
+local DKP_SYNC_INTERVAL = 30         -- DKP-only auto-sync every 30 seconds
+local DKP_TRIPLE_DELAYS = { 0, 3, 8 } -- triple-send delays for reliability
 
 ------------------------------------------------------------------------
 -- State
 ------------------------------------------------------------------------
-local isCommReady = false
-local syncTicker  = nil
+local isCommReady  = false
+local syncTicker   = nil
+local dkpSyncTicker = nil
 
 ------------------------------------------------------------------------
 -- Initialize comm system
@@ -77,6 +83,20 @@ function OneGuild:InitComm()
     syncTicker = C_Timer.NewTicker(SYNC_INTERVAL, function()
         if OneGuild:IsAuthorized() then
             OneGuild:FullSync()
+        end
+    end)
+
+    -- DKP-only auto-sync every 30 seconds (lightweight, batched)
+    dkpSyncTicker = C_Timer.NewTicker(DKP_SYNC_INTERVAL, function()
+        if OneGuild:IsAuthorized() then
+            OneGuild:BroadcastDKPBatch()
+        end
+    end)
+
+    -- Request DKP snapshot from online admins on login
+    C_Timer.After(5, function()
+        if OneGuild:IsAuthorized() then
+            OneGuild:SendCommMessage(MSG_DKPREQ)
         end
     end)
 
@@ -449,6 +469,18 @@ function OneGuild:HandleAddonMessage(prefix, message, channel, sender)
         if self.ProcessAuctionCancel then self:ProcessAuctionCancel(sender, data) end
     elseif msgType == MSG_WLSYNC then
         self:ProcessWhitelistSync(sender, data)
+    elseif msgType == MSG_DKPBATCH then
+        self:ProcessDKPBatch(sender, data)
+    elseif msgType == MSG_DKPREQ then
+        -- Someone requests DKP snapshot — only admins respond
+        if self:CanEditDKP() then
+            -- Random delay 1-4s to avoid thundering herd
+            C_Timer.After(math.random() * 3 + 1, function()
+                if OneGuild:IsAuthorized() then
+                    OneGuild:BroadcastDKPBatch()
+                end
+            end)
+        end
     elseif msgType == MSG_BYE      then
         if self.db and self.db.addonMembers and self.db.addonMembers[sender] then
             self.db.addonMembers[sender].online = false
@@ -1103,18 +1135,44 @@ function OneGuild:RequestSync()
 end
 
 ------------------------------------------------------------------------
--- BroadcastAllDKP  -- send all DKP entries
+-- BroadcastAllDKP  -- send all DKP entries (batched for reliability)
+-- Used during FullSync — packs multiple entries per message
 ------------------------------------------------------------------------
 function OneGuild:BroadcastAllDKP(startDelay)
     if not self.db or not self.db.dkp then return startDelay or 0 end
     local delay = startDelay or 0
 
+    -- Build batch messages (pack ~5 entries per msg to stay under 255 bytes)
+    local batch = {}
+    local count = 0
     for memberKey, dkpVal in pairs(self.db.dkp) do
-        delay = delay + 0.3
-        local ts = (self.db.dkpTimestamps and self.db.dkpTimestamps[memberKey]) or 0
-        C_Timer.After(delay, function()
+        -- Only send short keys (avoid duplicates from full name keys)
+        local short = strsplit("-", memberKey)
+        if memberKey == short then
+            local ts = (self.db.dkpTimestamps and self.db.dkpTimestamps[memberKey]) or 0
+            table.insert(batch, memberKey .. "=" .. tostring(dkpVal) .. "=" .. tostring(ts))
+            count = count + 1
+            if count >= 5 then
+                local payload = table.concat(batch, ";")
+                delay = delay + 0.8
+                local d = delay
+                C_Timer.After(d, function()
+                    if not OneGuild:IsAuthorized() then return end
+                    OneGuild:SendCommMessage(MSG_DKPBATCH, payload)
+                end)
+                batch = {}
+                count = 0
+            end
+        end
+    end
+    -- Send remaining
+    if count > 0 then
+        local payload = table.concat(batch, ";")
+        delay = delay + 0.8
+        local d = delay
+        C_Timer.After(d, function()
             if not OneGuild:IsAuthorized() then return end
-            OneGuild:SendCommMessage(MSG_DKP, memberKey .. "|" .. tostring(dkpVal) .. "|" .. tostring(ts))
+            OneGuild:SendCommMessage(MSG_DKPBATCH, payload)
         end)
     end
     return delay
@@ -1200,15 +1258,176 @@ function OneGuild:ProcessWhitelistSync(sender, data)
 end
 
 ------------------------------------------------------------------------
--- SendDKPUpdate  -- send a single DKP update immediately
+-- SendDKPUpdate  -- send a single DKP update with TRIPLE-SEND for reliability
+-- Sends the same message 3 times (0s, 3s, 8s) to ensure delivery
 ------------------------------------------------------------------------
 function OneGuild:SendDKPUpdate(memberKey, dkpVal)
     local ts = time()
     -- Store locally with timestamp
     self:SetDKPForPlayer(memberKey, dkpVal, ts)
-    -- Broadcast with timestamp so receivers know which data is freshest
-    self:SendCommMessage(MSG_DKP, memberKey .. "|" .. tostring(dkpVal) .. "|" .. tostring(ts))
-    self:Debug("DKP gesendet: " .. memberKey .. " = " .. tostring(dkpVal) .. " (ts=" .. ts .. ")")
+
+    local payload = memberKey .. "|" .. tostring(dkpVal) .. "|" .. tostring(ts)
+
+    -- Triple-send: fire the same message 3 times with delays
+    for _, delay in ipairs(DKP_TRIPLE_DELAYS) do
+        C_Timer.After(delay, function()
+            if not isCommReady or not IsInGuild() then return end
+            OneGuild:SendCommMessage(MSG_DKP, payload)
+        end)
+    end
+
+    self:Debug("DKP gesendet (3x): " .. memberKey .. " = " .. tostring(dkpVal) .. " (ts=" .. ts .. ")")
+end
+
+------------------------------------------------------------------------
+-- SendDKPUpdateBatch  -- send multiple DKP updates at once (for raid distribution)
+-- Collects all into batches, triple-sends each batch
+------------------------------------------------------------------------
+function OneGuild:SendDKPUpdateBatch(updates)
+    if not updates or #updates == 0 then return end
+    local ts = time()
+
+    -- Store all locally first
+    for _, upd in ipairs(updates) do
+        self:SetDKPForPlayer(upd.name, upd.dkp, ts)
+    end
+
+    -- Build batch messages (~5 per message to stay under 255 bytes)
+    local batches = {}
+    local current = {}
+    local count = 0
+    for _, upd in ipairs(updates) do
+        local short = strsplit("-", upd.name)
+        table.insert(current, short .. "=" .. tostring(upd.dkp) .. "=" .. tostring(ts))
+        count = count + 1
+        if count >= 5 then
+            table.insert(batches, table.concat(current, ";"))
+            current = {}
+            count = 0
+        end
+    end
+    if count > 0 then
+        table.insert(batches, table.concat(current, ";"))
+    end
+
+    -- Triple-send each batch with proper stagger
+    for bIdx, batchPayload in ipairs(batches) do
+        for _, tripleDelay in ipairs(DKP_TRIPLE_DELAYS) do
+            local sendDelay = tripleDelay + (bIdx - 1) * 1.0
+            C_Timer.After(sendDelay, function()
+                if not isCommReady or not IsInGuild() then return end
+                OneGuild:SendCommMessage(MSG_DKPBATCH, batchPayload)
+            end)
+        end
+    end
+
+    self:Debug("DKP Batch gesendet (3x): " .. #updates .. " Spieler in " .. #batches .. " Paketen")
+end
+
+------------------------------------------------------------------------
+-- BroadcastDKPBatch  -- lightweight DKP-only sync (called every 30s)
+-- Sends ALL current DKP as batched messages
+------------------------------------------------------------------------
+function OneGuild:BroadcastDKPBatch()
+    if not self.db or not self.db.dkp then return end
+    if not self:CanEditDKP() then return end
+
+    local batch = {}
+    local count = 0
+    local msgNum = 0
+    for memberKey, dkpVal in pairs(self.db.dkp) do
+        local short = strsplit("-", memberKey)
+        if memberKey == short then
+            local ts = (self.db.dkpTimestamps and self.db.dkpTimestamps[memberKey]) or 0
+            table.insert(batch, memberKey .. "=" .. tostring(dkpVal) .. "=" .. tostring(ts))
+            count = count + 1
+            if count >= 5 then
+                local payload = table.concat(batch, ";")
+                msgNum = msgNum + 1
+                local d = msgNum * 0.8
+                C_Timer.After(d, function()
+                    if not isCommReady or not IsInGuild() then return end
+                    OneGuild:SendCommMessage(MSG_DKPBATCH, payload)
+                end)
+                batch = {}
+                count = 0
+            end
+        end
+    end
+    if count > 0 then
+        local payload = table.concat(batch, ";")
+        msgNum = msgNum + 1
+        local d = msgNum * 0.8
+        C_Timer.After(d, function()
+            if not isCommReady or not IsInGuild() then return end
+            OneGuild:SendCommMessage(MSG_DKPBATCH, payload)
+        end)
+    end
+end
+
+------------------------------------------------------------------------
+-- ProcessDKPBatch  -- receive batched DKP data (multiple players in one msg)
+-- Format: "Player1=100=ts;Player2=200=ts;Player3=50=ts"
+------------------------------------------------------------------------
+function OneGuild:ProcessDKPBatch(sender, data)
+    if not data or not self.db then return end
+    if not self.db.dkp then self.db.dkp = {} end
+
+    -- Trust check (same as ProcessDKP)
+    local senderShort = strsplit("-", sender)
+    local isAdmin = false
+
+    local myName = UnitName("player") or ""
+    if sender == myName or senderShort == myName then isAdmin = true end
+    if not isAdmin and self:IsOnWhitelist(senderShort) then isAdmin = true end
+    if not isAdmin and IsInGuild() then
+        local numGuild = GetNumGuildMembers() or 0
+        for i = 1, numGuild do
+            local gName, _, rankIdx = GetGuildRosterInfo(i)
+            if gName then
+                local gs = strsplit("-", gName)
+                if gs == senderShort or gName == sender then
+                    if rankIdx and rankIdx <= 1 then isAdmin = true end
+                    break
+                end
+            end
+        end
+    end
+    if not isAdmin and IsInRaid() then
+        local numRaid = GetNumGroupMembers() or 0
+        for i = 1, numRaid do
+            local name, rank = GetRaidRosterInfo(i)
+            if name then
+                local ns = strsplit("-", name)
+                if ns == senderShort or name == sender then
+                    if rank and rank >= 1 then isAdmin = true end
+                    break
+                end
+            end
+        end
+    end
+
+    if not isAdmin then return end
+
+    -- Parse batch: "Name1=dkp=ts;Name2=dkp=ts;..."
+    local updated = 0
+    for entry in data:gmatch("[^;]+") do
+        local memberKey, dkpStr, tsStr = strsplit("=", entry)
+        if memberKey then
+            local dkpVal = tonumber(dkpStr) or 0
+            local incomingTs = tonumber(tsStr) or 0
+            local localTs = self:GetDKPTimestamp(memberKey)
+            -- Only accept if incoming is newer (or no local data)
+            if incomingTs == 0 or localTs == 0 or incomingTs >= localTs then
+                self:SetDKPForPlayer(memberKey, dkpVal, incomingTs > 0 and incomingTs or nil)
+                updated = updated + 1
+            end
+        end
+    end
+
+    if updated > 0 then
+        self:ScheduleDKPRefresh()
+    end
 end
 
 ------------------------------------------------------------------------

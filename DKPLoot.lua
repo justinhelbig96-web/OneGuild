@@ -877,14 +877,15 @@ function OneGuild:EndAuction()
         winner = auction.highBid.player
         winAmount = auction.highBid.amount
 
-        -- Deduct DKP from winner
+        -- Deduct DKP from winner (SendDKPUpdate stores locally + triple-sends)
         local currentDKP = self:GetDKPForPlayer(winner)
         local newDKP = currentDKP - winAmount
-        self:SetDKPForPlayer(winner, newDKP)
 
-        -- Broadcast DKP update
+        -- Broadcast DKP update (triple-send for reliability)
         if self.SendDKPUpdate then
             self:SendDKPUpdate(winner, newDKP)
+        else
+            self:SetDKPForPlayer(winner, newDKP)
         end
 
         -- Add to DKP history
