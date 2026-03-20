@@ -1,9 +1,9 @@
 ------------------------------------------------------------------------
--- OneGuild - UIEffects.lua  v1.4.1
+-- OneGuild - UIEffects.lua  v1.4.2
 -- Premium visual effects: shines, glows, animated progress, particles
 -- Makes the UI look like no other addon
 ------------------------------------------------------------------------
-print("|cFFFFB800[OneGuild]|r UIEffects.lua v1.4.1 wird geladen...")
+print("|cFFFFB800[OneGuild]|r UIEffects.lua v1.4.2 wird geladen...")
 
 local _, OneGuild = ...
 
@@ -13,6 +13,26 @@ local _, OneGuild = ...
 OneGuild.FX = {}
 local FX = OneGuild.FX
 local appliedToMain = false
+
+-- Track all created tickers and textures for live cleanup
+FX._tickers  = {}   -- { ticker1, ticker2, ... }
+FX._textures = {}   -- { tex1, tex2, ... }
+FX._frames   = {}   -- { frame1, ... } (e.g. AnimatedBar track frames)
+
+local function TrackTicker(t)
+    if t then table.insert(FX._tickers, t) end
+    return t
+end
+
+local function TrackTexture(tex)
+    if tex then table.insert(FX._textures, tex) end
+    return tex
+end
+
+local function TrackFrame(f)
+    if f then table.insert(FX._frames, f) end
+    return f
+end
 
 ------------------------------------------------------------------------
 -- 1) SHINE SWEEP: a diagonal light beam sweeps across a frame
@@ -673,6 +693,68 @@ function FX:HookDialogs()
             end
         end
     end)
+end
+
+------------------------------------------------------------------------
+-- CLEANUP: Remove all effects from main UI for live refresh
+------------------------------------------------------------------------
+function FX:CleanupMainUI()
+    local f = OneGuild.mainFrame
+    if not f then return end
+
+    -- Cancel all tracked tickers
+    for _, t in ipairs(FX._tickers) do
+        if t and t.Cancel then pcall(t.Cancel, t) end
+    end
+    FX._tickers = {}
+
+    -- Hide all tracked textures
+    for _, tex in ipairs(FX._textures) do
+        if tex and tex.Hide then pcall(tex.Hide, tex) end
+    end
+    FX._textures = {}
+
+    -- Hide tracked sub-frames
+    for _, fr in ipairs(FX._frames) do
+        if fr and fr.Hide then pcall(fr.Hide, fr) end
+    end
+    FX._frames = {}
+
+    -- Reset guard flags on mainFrame
+    f._borderGlowPulse = nil
+    f._shimmerTicker = nil
+    f._goldParticles = nil
+    f._headerShine = nil
+    f._shineSweep = nil
+
+    -- Reset text glow
+    if f.titleText then f.titleText._textGlowTicker = nil end
+
+    -- Reset tab indicator
+    if OneGuild.tabButtons then
+        for _, btn in ipairs(OneGuild.tabButtons) do
+            if btn:GetParent() then
+                local tc = btn:GetParent()
+                if tc._indicator then tc._indicator:Hide() end
+                if tc._indicatorGlow then tc._indicatorGlow:Hide() end
+                tc._indicator = nil
+                tc._indicatorGlow = nil
+                break
+            end
+        end
+    end
+
+    appliedToMain = false
+end
+
+------------------------------------------------------------------------
+-- REFRESH: Live-update effects with current settings (no /reload)
+------------------------------------------------------------------------
+function FX:Refresh()
+    FX:CleanupMainUI()
+    if OneGuild.mainFrame and OneGuild.mainFrame:IsShown() then
+        FX:ApplyToMainUI()
+    end
 end
 
 ------------------------------------------------------------------------

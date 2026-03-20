@@ -269,6 +269,13 @@ function OneGuild:ShowWelcomeScreen()
 
     -- Changelog data per version
     local changelogData = {
+        { version = "v1.4.3", entries = {
+            "FIX: Notizen & Shop-Sync zuverlaessiger",
+            "Doppel-Versand bei neuen Eintraegen",
+            "Periodischer Mini-Sync (alle 45s)",
+            "Auto-Chunking fuer lange Nachrichten",
+            "Groessere Abstände zwischen Sync-Nachrichten",
+        }},
         { version = "v1.4.2", entries = {
             "Shop: Gold/Silber/Kupfer Icons statt g/s/c",
             "NEU: Design-Tab in Einstellungen",

@@ -46,6 +46,7 @@ local MSG_NOTEREQ  = "NTR"          -- request all notes from online members
 local MSG_SHOP     = "SH"           -- shop listing (create/sync)
 local MSG_SHOPDEL  = "SHD"          -- shop listing deleted
 local MSG_SHOPREQ  = "SHR"          -- request all shop listings
+local MSG_CHUNK    = "CK"           -- auto-chunked message (payload > 250 bytes)
 
 local DKP_SYNC_INTERVAL = 30         -- DKP-only auto-sync every 30 seconds
 local DKP_TRIPLE_DELAYS = { 0, 3, 8 } -- triple-send delays for reliability
@@ -56,6 +57,35 @@ local DKP_TRIPLE_DELAYS = { 0, 3, 8 } -- triple-send delays for reliability
 local isCommReady  = false
 local syncTicker   = nil
 local dkpSyncTicker = nil
+
+-- Chunking state (auto-split messages that exceed 250 bytes)
+local chunkCounter = 0
+local chunkBuffer  = {}   -- [sender:uid] = { parts={}, total=N, rcvd=0 }
+local MAX_MSG_LEN  = 250  -- safe limit for C_ChatInfo.SendAddonMessage
+local CHUNK_DATA   = 232  -- usable data per chunk (250 - CK:xxxx~99~99~ overhead)
+
+------------------------------------------------------------------------
+-- Internal: send one payload, auto-chunking if > MAX_MSG_LEN
+------------------------------------------------------------------------
+local function RawSend(payload, chatType, target)
+    if #payload <= MAX_MSG_LEN then
+        C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, chatType, target)
+        return
+    end
+    -- Split into chunks
+    chunkCounter = chunkCounter + 1
+    local uid = string.format("%04x", chunkCounter % 65536)
+    local total = math.ceil(#payload / CHUNK_DATA)
+    for i = 1, total do
+        local s = (i - 1) * CHUNK_DATA + 1
+        local chunk = payload:sub(s, s + CHUNK_DATA - 1)
+        local ckMsg = MSG_CHUNK .. ":" .. uid .. "~" .. i .. "~" .. total .. "~" .. chunk
+        -- Stagger to avoid WoW throttle
+        C_Timer.After((i - 1) * 0.08, function()
+            C_ChatInfo.SendAddonMessage(COMM_PREFIX, ckMsg, chatType, target)
+        end)
+    end
+end
 
 ------------------------------------------------------------------------
 -- Initialize comm system
@@ -120,6 +150,17 @@ function OneGuild:InitComm()
         end
     end)
 
+    -- Lightweight periodic note+shop re-sync every 45 seconds
+    -- (much lighter than full sync, catches any dropped messages)
+    C_Timer.NewTicker(45, function()
+        if OneGuild:IsAuthorized() then
+            local d = 0.3
+            d = OneGuild:BroadcastAllNotes(d)
+            d = d + 0.5
+            OneGuild:BroadcastAllShopListings(d)
+        end
+    end)
+
     -- Request fresh roster data, then import any legacy officer note DKP
     -- (only imports for players that have NO comm-based DKP yet)
     C_Timer.After(8, function()
@@ -146,9 +187,9 @@ function OneGuild:SendCommMessage(msgType, data)
         payload = msgType .. ":" .. data
     end
 
-    C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "GUILD")
+    RawSend(payload, "GUILD")
     if msgType ~= "POS" then
-        self:Debug("Comm TX: " .. strsub(payload, 1, 80))
+        self:Debug("Comm TX" .. (#payload > MAX_MSG_LEN and " [chunked]" or "") .. ": " .. strsub(payload, 1, 80))
     end
 end
 
@@ -163,14 +204,14 @@ function OneGuild:SendCommMessageDKP(msgType, data)
     local payload = msgType
     if data then payload = msgType .. ":" .. data end
 
-    -- Always send via GUILD
-    C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "GUILD")
+    -- Always send via GUILD (auto-chunked)
+    RawSend(payload, "GUILD")
 
     -- ALSO send via RAID or PARTY if in a group (dual-channel)
     if IsInRaid() then
-        C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "RAID")
+        RawSend(payload, "RAID")
     elseif IsInGroup() then
-        C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "PARTY")
+        RawSend(payload, "PARTY")
     end
 end
 
@@ -185,14 +226,13 @@ function OneGuild:SendAuctionMessage(msgType, data)
     if data then payload = msgType .. ":" .. data end
 
     if IsInRaid() then
-        C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "RAID")
+        RawSend(payload, "RAID")
         self:Debug("AUC TX [RAID]: " .. strsub(payload, 1, 80))
     elseif IsInGroup() then
-        C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "PARTY")
+        RawSend(payload, "PARTY")
         self:Debug("AUC TX [PARTY]: " .. strsub(payload, 1, 80))
     elseif IsInGuild() then
-        -- Fallback to GUILD if somehow not in group
-        C_ChatInfo.SendAddonMessage(COMM_PREFIX, payload, "GUILD")
+        RawSend(payload, "GUILD")
         self:Debug("AUC TX [GUILD fallback]: " .. strsub(payload, 1, 80))
     end
 end
@@ -461,6 +501,12 @@ function OneGuild:HandleAddonMessage(prefix, message, channel, sender)
     if sender == myFull or sender == myName then return end
 
     local msgType, data = strsplit(":", message, 2)
+
+    -- Auto-reassemble chunked messages
+    if msgType == MSG_CHUNK then
+        self:ProcessChunk(sender, data)
+        return
+    end
 
     -- Suppress noisy POS debug logs
     if msgType ~= MSG_POS then
@@ -1724,12 +1770,20 @@ function OneGuild:BroadcastNote(note)
         tostring(note.timestamp or 0),
         safeText,
     }, "|")
+    -- Double-send with delay for reliability (WoW throttle can drop single sends)
     self:SendCommMessage(MSG_NOTE, payload)
+    C_Timer.After(3, function()
+        if OneGuild.SendCommMessage then OneGuild:SendCommMessage(MSG_NOTE, payload) end
+    end)
 end
 
 function OneGuild:BroadcastNoteDel(noteId)
     if not noteId then return end
+    -- Double-send for reliability
     self:SendCommMessage(MSG_NOTEDEL, noteId)
+    C_Timer.After(3, function()
+        if OneGuild.SendCommMessage then OneGuild:SendCommMessage(MSG_NOTEDEL, noteId) end
+    end)
 end
 
 function OneGuild:BroadcastAllNotes(delay)
@@ -1739,9 +1793,15 @@ function OneGuild:BroadcastAllNotes(delay)
         if note.id then
             local n = note -- capture
             C_Timer.After(delay, function()
-                if OneGuild.BroadcastNote then OneGuild:BroadcastNote(n) end
+                -- Direct single-send (BroadcastNote does double-send, avoid that for bulk)
+                if not n.id then return end
+                local safeText = (n.text or ""):gsub("|", "%%PIPE%%")
+                local payload = table.concat({
+                    n.id, n.author or "?", tostring(n.timestamp or 0), safeText,
+                }, "|")
+                OneGuild:SendCommMessage(MSG_NOTE, payload)
             end)
-            delay = delay + 0.3
+            delay = delay + 0.5
         end
     end
     return delay
@@ -1783,7 +1843,7 @@ end
 -- Format: id|seller|itemName|price|currency|note|timestamp|expires
 ------------------------------------------------------------------------
 
-function OneGuild:BroadcastShopListing(listing)
+function OneGuild:BroadcastShopListing(listing, noDuplicate)
     if not listing or not listing.id then return end
     local safeName = (listing.itemName or ""):gsub("|", "%%PIPE%%")
     local safeNote = (listing.note or ""):gsub("|", "%%PIPE%%")
@@ -1804,11 +1864,21 @@ function OneGuild:BroadcastShopListing(listing)
         tostring(listing.itemQuality or 1),
     }, "|")
     self:SendCommMessage(MSG_SHOP, payload)
+    -- Double-send for reliability (unless called from bulk broadcast)
+    if not noDuplicate then
+        C_Timer.After(3, function()
+            if OneGuild.SendCommMessage then OneGuild:SendCommMessage(MSG_SHOP, payload) end
+        end)
+    end
 end
 
 function OneGuild:BroadcastShopDel(listingId)
     if not listingId then return end
+    -- Double-send for reliability
     self:SendCommMessage(MSG_SHOPDEL, listingId)
+    C_Timer.After(3, function()
+        if OneGuild.SendCommMessage then OneGuild:SendCommMessage(MSG_SHOPDEL, listingId) end
+    end)
 end
 
 function OneGuild:BroadcastAllShopListings(delay)
@@ -1818,9 +1888,10 @@ function OneGuild:BroadcastAllShopListings(delay)
         if listing.id then
             local l = listing
             C_Timer.After(delay, function()
-                if OneGuild.BroadcastShopListing then OneGuild:BroadcastShopListing(l) end
+                -- Direct single-send (avoid double-send for bulk broadcasts)
+                if OneGuild.BroadcastShopListing then OneGuild:BroadcastShopListing(l, true) end
             end)
-            delay = delay + 0.3
+            delay = delay + 0.5
         end
     end
     return delay
@@ -1906,6 +1977,46 @@ function OneGuild:ProcessShopDel(sender, data)
 
     if self.RefreshShop then self:RefreshShop() end
     if self.UpdateShopBadge then self:UpdateShopBadge() end
+end
+
+------------------------------------------------------------------------
+-- Chunk Reassembly — collects CK messages and re-dispatches the full payload
+------------------------------------------------------------------------
+function OneGuild:ProcessChunk(sender, data)
+    if not data then return end
+    local uid, seqStr, totalStr, rest = data:match("^(.-)~(%d+)~(%d+)~(.+)$")
+    if not uid or not rest then return end
+
+    local seq   = tonumber(seqStr)
+    local total = tonumber(totalStr)
+    if not seq or not total or total < 1 or seq < 1 or seq > total then return end
+
+    local key = sender .. ":" .. uid
+    if not chunkBuffer[key] then
+        chunkBuffer[key] = { parts = {}, total = total, rcvd = 0 }
+        -- Auto-expire incomplete buffers after 20 seconds
+        C_Timer.After(20, function() chunkBuffer[key] = nil end)
+    end
+
+    local buf = chunkBuffer[key]
+    if not buf.parts[seq] then
+        buf.parts[seq] = rest
+        buf.rcvd = buf.rcvd + 1
+    end
+
+    if buf.rcvd >= buf.total then
+        -- Reassemble full payload
+        local pieces = {}
+        for i = 1, buf.total do
+            pieces[i] = buf.parts[i] or ""
+        end
+        local full = table.concat(pieces)
+        chunkBuffer[key] = nil
+
+        self:Debug("Comm RX [reassembled " .. buf.total .. " chunks] von " .. sender)
+        -- Re-feed as a normal message (will not match CK again)
+        self:HandleAddonMessage(COMM_PREFIX, full, "GUILD", sender)
+    end
 end
 
 ------------------------------------------------------------------------
